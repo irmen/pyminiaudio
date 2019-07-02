@@ -1,0 +1,25 @@
+# Project specific
+Pipfile
+NOTES.md
+
+# Virtual enviroment
+/.venv/
+
+# Vscode
+/.vscode/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+# output samples, but don't exclude the samples dir
+*.wav
+*.mp3
+!samples/*.wav
+.mypy_cache/
+.eggs/
+.pytest_cache/
+build
+dist
+*.egg-info/
+.directory

@@ -6,14 +6,15 @@
 
 This module provides:
 
-- the [miniaudio](https://github.com/dr-soft/miniaudio/) cross platform sound playback and conversion library
+- the [miniaudio](https://github.com/dr-soft/miniaudio/) cross platform sound playback, recording and conversion library
 - its decoders for wav, flac, vorbis and mp3
 - python bindings via cffi for much of the functions offered in those libraries:
   - getting audio file properties (such as duration, number of channels, sample rate) 
   - reading and decoding audio files
   - streaming audio files
   - playback  (via efficient asynchronous pull-API)
-  - streaming and playback are done with generator functions  
+  - recording
+  - streaming, recording and playback are done with generator functions
 
 
 *Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).* 
@@ -29,7 +30,6 @@ Software license for these Python bindings, miniaudio and the decoders: MIT
 ## Todo
 
 - the various format conversion functions aren't properly exposed yet.
-- only playback for now, the recording capabilities of miniaudio aren't exposed yet 
 
 
 ## Examples
@@ -50,7 +50,7 @@ device.close()
 ```python
 import miniaudio
 
-def memory_stream(soundfile: miniaudio.DecodedSoundFile) -> miniaudio.AudioProducerType:
+def memory_stream(soundfile: miniaudio.DecodedSoundFile) -> miniaudio.PlaybackCallbackGeneratorType:
     required_frames = yield b""  # generator initialization
     current = 0
     samples = memoryview(soundfile.samples)     # avoid needless memory copying
@@ -240,15 +240,46 @@ ffmpeg.terminate()
        close(self)
            Halt playback and close down the device.
        
-       start(self, audio_producer: Callable[[int, int, int], Union[bytes, array.array]]) -> None
+       start(self, callback_generator: PlaybackCallbackGeneratorType) -> None
            Start the audio device: playback begins. The audio data is provided by the given audio_producer
            generator. The generator gets sent the required number of frames and should yield the sample data
            as raw bytes or as an array.array.  (it should already be started before passing it in)
        
        stop(self) -> None
            Halt playback.
+           
+           
+    class CaptureDevice(ma_input_format: int = 2, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None
+        An audio device provided by miniaudio, for audio capture (recording).
+
+        close(self)
+            Halt capture and close down the device.
+       
+        start(self, callback_generator: CaptureCallbackGeneratorType) -> None
+            Start the audio device: capture (recording) begins.
+            The recorded audio data is sent to the given callback generator as raw bytes.
+            (it should already be started before)
+       
+        stop(self) -> None
+            Halt capture.
 
 
+    class DuplexStream(playback_format: int = 2, playback_channels: int = 2, capture_format: int = 2, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) -> None
+        Joins a capture device and a playback device.
+        
+        close(self)
+            Halt capture and playback, and close down the device.
+
+        start(self, callback_generator: DuplexCallbackGeneratorType) -> None
+            Start the audio device: playback and capture begin.
+            The audio data for playback is provided by the given callback generator, which is sent the
+            recorded audio data at the same time.
+            (it should already be started before passing it in)
+
+        stop(self) -> None
+            Halt capture and playback.
+     
+     
     class WavFileReadStream(pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, ma_output_format: int, max_frames: int = 0) -> None
         An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
     

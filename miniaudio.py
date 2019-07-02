@@ -902,14 +902,14 @@ class AbstractDevice:
             raise MiniaudioError("failed to start audio device", result)
 
     def stop(self) -> None:
-        """Halt playback."""
+        """Halt playback or capture."""
         self.callback_generator = None
         result = lib.ma_device_stop(self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to stop audio device", result)
 
     def close(self) -> None:
-        """Halt playback and close down the device."""
+        """Halt playback or capture and close down the device."""
         self.callback_generator = None
         if self._device is not None:
             lib.ma_device_uninit(self._device)
@@ -926,6 +926,7 @@ def _pointer_or_null(_id: Union[ffi.CData, None]) -> ffi.CData:
 
 
 class CaptureDevice(AbstractDevice):
+    """An audio device provided by miniaudio, for audio capture (recording)."""
     def __init__(self, ma_input_format: int = ma_format_s16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
                  ) -> None:
@@ -952,6 +953,9 @@ class CaptureDevice(AbstractDevice):
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
     def start(self, callback_generator: CaptureCallbackGeneratorType) -> None:      # type: ignore
+        """Start the audio device: capture (recording) begins.
+        The recorded audio data is sent to the given callback generator as raw bytes.
+        (it should already be started before)"""
         return super().start(callback_generator)
 
     def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
@@ -1021,6 +1025,7 @@ class PlaybackDevice(AbstractDevice):
 
 
 class DuplexStream(AbstractDevice):
+    """Joins a capture device and a playback device."""
     def __init__(self, playback_format: int = ma_format_s16,
                  playback_channels: int = 2, capture_format: int = ma_format_s16,
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
@@ -1059,6 +1064,10 @@ class DuplexStream(AbstractDevice):
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
     def start(self, callback_generator: DuplexCallbackGeneratorType) -> None:   # type: ignore
+        """Start the audio device: playback and capture begin.
+        The audio data for playback is provided by the given callback generator, which is sent the
+        recorded audio data at the same time.
+        (it should already be started before passing it in)"""
         return super().start(callback_generator)
 
     def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
