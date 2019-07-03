@@ -234,7 +234,8 @@ ffmpeg.terminate()
         Writes the pcm sound to a WAV file
 
 
-    class PlaybackDevice(ma_output_format: int = 2, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200)
+    class PlaybackDevice(ma_output_format: int = 2, nchannels: int = 2, sample_rate: int = 44100, 
+                         buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None)
        An audio device provided by miniaudio, for audio playback.
        
        close(self)
@@ -249,7 +250,8 @@ ffmpeg.terminate()
            Halt playback.
            
            
-    class CaptureDevice(ma_input_format: int = 2, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None
+    class CaptureDevice(ma_input_format: int = 2, nchannels: int = 2, sample_rate: int = 44100,
+                        buffersize_msec: int = 200, device_id: Union[ffi.CData, NoneType] = None)
         An audio device provided by miniaudio, for audio capture (recording).
 
         close(self)
@@ -264,7 +266,9 @@ ffmpeg.terminate()
             Halt capture.
 
 
-    class DuplexStream(playback_format: int = 2, playback_channels: int = 2, capture_format: int = 2, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) -> None
+    class DuplexStream(playback_format: int = 2, playback_channels: int = 2, capture_format: int = 2, 
+                       capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, 
+                       playback_device_id: Union[ffi.CData, NoneType] = None, capture_device_id: Union[ffi.CData, NoneType] = None)
         Joins a capture device and a playback device.
         
         close(self)
@@ -280,7 +284,7 @@ ffmpeg.terminate()
             Halt capture and playback.
      
      
-    class WavFileReadStream(pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, ma_output_format: int, max_frames: int = 0) -> None
+    class WavFileReadStream(pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, ma_output_format: int, max_frames: int = 0)
         An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
     
         close(self) -> None
@@ -291,17 +295,10 @@ ffmpeg.terminate()
 
 
     class Devices:
-        Access to the audio playback and record devices that miniaudio exposes
+        Query the audio playback and record devices that miniaudio provides
     
-        get_captures(self) -> List[miniaudio.Device]
-            Get a list of capture devices
+        get_captures(self) -> List[Dict[str, Any]]
+            Get a list of capture devices and some details about them
         
-        get_playbacks(self) -> List[miniaudio.Device]
-            Get a list of playback devices
-        
-
-    class DeviceInfo:
-        Contains various properties of a miniaudio playback or record device
-
-        info(self) -> Dict[str, Any]
-            obtain detailed info about the device
+        get_playbacks(self) -> List[Dict[str, Any]]
+            Get a list of playback devices and some details about them

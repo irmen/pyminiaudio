@@ -20,6 +20,7 @@ __pycache__/
 .eggs/
 .pytest_cache/
 .idea/workspace.xml
+.idea/dictionaries/*.xml
 build
 dist
 *.egg-info/

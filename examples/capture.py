@@ -3,6 +3,16 @@ from time import sleep
 import miniaudio
 
 
+def choose_device():
+    devices = miniaudio.Devices()
+    print("Available recording devices:")
+    captures = devices.get_captures()
+    for d in enumerate(captures):
+        print("{num} = {name}".format(num=d[0], name=d[1]['name']))
+    choice = int(input("record from which device? "))
+    return captures[choice]
+
+
 if __name__ == "__main__":
     buffer_chunks = []
 
@@ -13,19 +23,8 @@ if __name__ == "__main__":
             print(".", end="", flush=True)
             buffer_chunks.append(data)
 
-    devices = miniaudio.Devices()
-    print("Available recording devices:")
-    captures = devices.get_captures()
-    for p in enumerate(captures):
-        print(p[0], "= ", p[1])
-    choice = int(input("record from which device? "))
-
-    selected_device = captures[choice]
-    print("Recording from {}".format(selected_device.name))
-
-    capture = miniaudio.CaptureDevice(buffersize_msec=1000, sample_rate=44100,
-                                      device_id=selected_device._id)   # TODO: fix ownership of _id? or create copy?
-    print(capture.format)
+    selected_device = choose_device()
+    capture = miniaudio.CaptureDevice(buffersize_msec=1000, sample_rate=44100, device_id=selected_device["id"])
     generator = record_to_buffer()
     print("Recording for 3 seconds")
     next(generator)

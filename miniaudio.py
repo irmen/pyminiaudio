@@ -645,7 +645,7 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     if pwav == ffi.NULL:
         raise IOError("can't open file for writing")
     try:
-        amount = lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
+        lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
     finally:
         lib.drwav_close(pwav)
 
@@ -670,41 +670,8 @@ PLAYBACK = 'playback'
 CAPTURE = 'capture'
 
 
-class DeviceInfo:
-    """Contains various properties of a miniaudio playback or capture device"""
-    def __init__(self, device_type: str, ma_device_info: ffi.CData, context: ffi.CData) -> None:
-        self.name = ffi.string(ma_device_info.name).decode()
-        self.device_type = device_type
-        self._id = ma_device_info.id     # note: memory is owned by the Devices class. TODO This should be fixed.
-        self._device_info = ma_device_info
-        self._context = context
-
-    def __str__(self) -> str:
-        return self.device_type + ":" + self.name
-
-    def info(self) -> Dict[str, Any]:
-        """obtain detailed info about the device"""
-        if self.device_type == PLAYBACK:
-            device_type = lib.ma_device_type_playback
-        elif self.device_type == CAPTURE:
-            device_type = lib.ma_device_type_capture
-        else:
-            raise ValueError("wrong device type")
-        lib.ma_context_get_device_info(self._context, device_type, ffi.addressof(self._id),
-                                       0, ffi.addressof(self._device_info))
-        formats = set(self._device_info.formats[0:self._device_info.formatCount])
-        format_names = {f: ffi.string(lib.ma_get_format_name(f)).decode() for f in formats}
-        return {
-            'minChannels': self._device_info.minChannels,
-            'maxChannels': self._device_info.maxChannels,
-            'minSampleRate': self._device_info.minSampleRate,
-            'maxSampleRate': self._device_info.maxSampleRate,
-            'formats': format_names
-        }
-
-
 class Devices:
-    """Access to the audio playback and capture devices that miniaudio exposes"""
+    """Query the audio playback and record devices that miniaudio provides"""
     def __init__(self) -> None:
         self._context = ffi.new("ma_context*")
         result = lib.ma_context_init(ffi.NULL, 0, ffi.NULL, self._context)
@@ -712,8 +679,8 @@ class Devices:
             raise MiniaudioError("cannot init context", result)
         self.backend = ffi.string(lib.ma_get_backend_name(self._context[0].backend)).decode()
 
-    def get_playbacks(self) -> List[DeviceInfo]:
-        """Get a list of playback devices"""
+    def get_playbacks(self) -> List[Dict[str, Any]]:
+        """Get a list of playback devices and some details about them"""
         playback_infos = ffi.new("ma_device_info**")
         playback_count = ffi.new("ma_uint32*")
         result = lib.ma_context_get_devices(self._context, playback_infos, playback_count, ffi.NULL,  ffi.NULL)
@@ -722,11 +689,18 @@ class Devices:
         devs = []
         for i in range(playback_count[0]):
             ma_device_info = playback_infos[0][i]
-            devs.append(DeviceInfo(PLAYBACK, ma_device_info, self._context))
+            dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
+            info = {
+                "name": ffi.string(ma_device_info.name).decode(),
+                "type": PLAYBACK,
+                "id": dev_id
+            }
+            info.update(self._get_info(PLAYBACK, ma_device_info))
+            devs.append(info)
         return devs
 
-    def get_captures(self) -> List[DeviceInfo]:
-        """Get a list of capture devices"""
+    def get_captures(self) -> List[Dict[str, Any]]:
+        """Get a list of capture devices and some details about them"""
         capture_infos = ffi.new("ma_device_info**")
         capture_count = ffi.new("ma_uint32*")
         result = lib.ma_context_get_devices(self._context, ffi.NULL,  ffi.NULL, capture_infos, capture_count)
@@ -735,8 +709,34 @@ class Devices:
         devs = []
         for i in range(capture_count[0]):
             ma_device_info = capture_infos[0][i]
-            devs.append(DeviceInfo(CAPTURE, ma_device_info, self._context))
+            dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
+            info = {
+                "name": ffi.string(ma_device_info.name).decode(),
+                "type": CAPTURE,
+                "id": dev_id
+            }
+            info.update(self._get_info(CAPTURE, ma_device_info))
+            devs.append(info)
         return devs
+
+    def _get_info(self, device_type: str, device_info: ffi.CData) -> Dict[str, Any]:
+        # obtain detailed info about the device
+        if device_type == PLAYBACK:
+            device_type_i = lib.ma_device_type_playback
+        elif device_type == CAPTURE:
+            device_type_i = lib.ma_device_type_capture
+        else:
+            raise ValueError("wrong device type")
+        lib.ma_context_get_device_info(self._context, device_type_i, ffi.addressof(device_info.id),
+                                       0, ffi.addressof(device_info))
+        formats = set(device_info.formats[0:device_info.formatCount])
+        return {
+            "formats": {f: ffi.string(lib.ma_get_format_name(f)).decode() for f in formats},
+            "minChannels": device_info.minChannels,
+            "maxChannels": device_info.maxChannels,
+            "minSampleRate": device_info.minSampleRate,
+            "maxSampleRate": device_info.maxSampleRate
+        }
 
     def __del__(self):
         lib.ma_context_uninit(self._context)
@@ -918,13 +918,6 @@ class AbstractDevice:
             del _callback_data[id(self)]
 
 
-def _pointer_or_null(_id: Union[ffi.CData, None]) -> ffi.CData:
-    if _id:
-        return ffi.addressof(_id)
-    else:
-        return ffi.NULL
-
-
 class CaptureDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio capture (recording)."""
     def __init__(self, ma_input_format: int = ma_format_s16, nchannels: int = 2,
@@ -939,9 +932,8 @@ class CaptureDevice(AbstractDevice):
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_capture)
-        _device_id = _pointer_or_null(device_id)
         lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec,
-                                        0, 0, 0, self.format, self.nchannels, ffi.NULL, _device_id)
+                                        0, 0, 0, self.format, self.nchannels, ffi.NULL, device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib.internal_data_callback
         self.callback_generator = None  # type: Optional[CaptureCallbackGeneratorType]
@@ -987,9 +979,8 @@ class PlaybackDevice(AbstractDevice):
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_playback)
-        _device_id = _pointer_or_null(device_id)
         lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec,
-                                        0, self.format, self.nchannels, 0, 0, _device_id, ffi.NULL)
+                                        0, self.format, self.nchannels, 0, 0, device_id or ffi.NULL, ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib.internal_data_callback
         self.callback_generator = None   # type: Optional[PlaybackCallbackGeneratorType]
@@ -1045,13 +1036,10 @@ class DuplexStream(AbstractDevice):
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_duplex)
 
-        _capture_device_id = _pointer_or_null(capture_device_id)
-        _playback_device_id = _pointer_or_null(playback_device_id)
-
         lib.ma_device_config_set_params(
             ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec, 0,
             playback_format, playback_channels, capture_format, capture_channels,
-            _playback_device_id, _capture_device_id)
+            playback_device_id or ffi.NULL, capture_device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib.internal_data_callback
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
