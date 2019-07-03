@@ -1,5 +1,6 @@
 [![saythanks](https://img.shields.io/badge/say-thanks-ff69b4.svg)](https://saythanks.io/to/irmen)
 [![Latest Version](https://img.shields.io/pypi/v/miniaudio.svg)](https://pypi.python.org/pypi/miniaudio/)
+[![Build Status](https://travis-ci.org/irmen/pyminiaudio.svg?branch=master)](https://travis-ci.org/irmen/pyminiaudio)
 
 
 # Python miniaudio
