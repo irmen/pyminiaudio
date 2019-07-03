@@ -1,0 +1,20 @@
+# travis CI config
+language: python
+python:
+  - 3.5
+  - 3.6
+  - 3.7
+  - 3.8-dev
+  - pypy3.5
+matrix:
+  fast_finish: true
+
+# Use fast travis build infrastructure explicitly
+dist: xenial
+sudo: false
+
+install:
+  - pip install .
+script:
+  - python setup.py test
+  - python -E -Wall -bb -c 'import miniaudio'
