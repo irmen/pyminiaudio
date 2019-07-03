@@ -5,32 +5,47 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
+__version__ = "1.5.dev0"
+
+
 import sys
 import os
 import io
 import array
 import struct
 import inspect
+from enum import Enum
 from typing import Generator, List, Tuple, Dict, Optional, Union, Any
 from _miniaudio import ffi, lib
-from _miniaudio.lib import ma_format_unknown, ma_format_u8, ma_format_s16, ma_format_s24, ma_format_s32, ma_format_f32
 
 lib.init_miniaudio()
 
 
-__version__ = "1.4"
+class SampleFormat(Enum):
+    UNKNOWN = lib.ma_format_unknown
+    UNSIGNED8 = lib.ma_format_u8
+    SIGNED16 = lib.ma_format_s16
+    SIGNED24 = lib.ma_format_s24
+    SIGNED32 = lib.ma_format_s32
+    FLOAT32 = lib.ma_format_f32
+
+
+class DeviceType(Enum):
+    PLAYBACK = lib.ma_device_type_playback
+    CAPTURE = lib.ma_device_type_capture
+    DUPLEX = lib.ma_device_type_duplex
 
 
 class DecodedSoundFile:
     """Contains the PCM samples and various properties of a fully decoded audio file."""
     def __init__(self, name: str, nchannels: int, sample_rate: int, sample_width: int,
-                 sample_format: int, samples: array.array) -> None:
+                 sample_format: SampleFormat, samples: array.array) -> None:
         self.name = name
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.sample_width = sample_width
-        self.sample_format = sample_format      # one of the ma_format_ values
-        self.sample_format_name = ffi.string(lib.ma_get_format_name(sample_format)).decode()
+        self.sample_format = sample_format
+        self.sample_format_name = ffi.string(lib.ma_get_format_name(sample_format.value)).decode()
         self.samples = samples
         self.num_frames = len(samples) // self.nchannels
         self.duration = self.num_frames / self.sample_rate
@@ -39,14 +54,14 @@ class DecodedSoundFile:
 class SoundFileInfo:
     """Contains the properties of an audio file."""
     def __init__(self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_width: int,
-                 sample_format: int, duration: float, num_frames: int, max_frame_size: int) -> None:
+                 sample_format: SampleFormat, duration: float, num_frames: int, max_frame_size: int) -> None:
         self.name = name
         self.file_format = file_format
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.sample_width = sample_width
-        self.sample_format = sample_format      # one of the ma_format_ values
-        self.sample_format_name = ffi.string(lib.ma_get_format_name(sample_format)).decode()
+        self.sample_format = sample_format
+        self.sample_format_name = ffi.string(lib.ma_get_format_name(sample_format.value)).decode()
         self.duration = duration
         self.num_frames = num_frames
         self.max_frame_size = max_frame_size
@@ -101,7 +116,7 @@ def vorbis_get_file_info(filename: str) -> SoundFileInfo:
         info = lib.stb_vorbis_get_info(vorbis)
         duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
         num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
-        return SoundFileInfo(filename, "vorbis", info.channels, info.sample_rate, 2, ma_format_s16,
+        return SoundFileInfo(filename, "vorbis", info.channels, info.sample_rate, 2, SampleFormat.SIGNED16,
                              duration, num_frames, info.max_frame_size)
     finally:
         lib.stb_vorbis_close(vorbis)
@@ -117,7 +132,7 @@ def vorbis_get_info(data: bytes) -> SoundFileInfo:
         info = lib.stb_vorbis_get_info(vorbis)
         duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
         num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
-        return SoundFileInfo("<memory>", "vorbis", info.channels, info.sample_rate, 2, ma_format_s16,
+        return SoundFileInfo("<memory>", "vorbis", info.channels, info.sample_rate, 2, SampleFormat.SIGNED16,
                              duration, num_frames, info.max_frame_size)
     finally:
         lib.stb_vorbis_close(vorbis)
@@ -136,7 +151,7 @@ def vorbis_read_file(filename: str) -> DecodedSoundFile:
         buffer = ffi.buffer(output[0], num_frames * channels[0] * 2)
         samples = _create_int_array(2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.free(output[0])
 
@@ -153,7 +168,7 @@ def vorbis_read(data: bytes) -> DecodedSoundFile:
         buffer = ffi.buffer(output[0], num_samples * channels[0] * 2)
         samples = _create_int_array(2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.free(output[0])
 
@@ -200,7 +215,7 @@ def flac_get_file_info(filename: str) -> SoundFileInfo:
         duration = flac.totalPCMFrameCount / flac.sampleRate
         sample_width = flac.bitsPerSample // 8
         return SoundFileInfo(filename, "flac", flac.channels, flac.sampleRate, sample_width,
-                             _ma_format_from_width(sample_width), duration, flac.totalPCMFrameCount, flac.maxBlockSize)
+                             _format_from_width(sample_width), duration, flac.totalPCMFrameCount, flac.maxBlockSize)
     finally:
         lib.drflac_close(flac)
 
@@ -214,7 +229,7 @@ def flac_get_info(data: bytes) -> SoundFileInfo:
         duration = flac.totalPCMFrameCount / flac.sampleRate
         sample_width = flac.bitsPerSample // 8
         return SoundFileInfo("<memory>", "flac", flac.channels, flac.sampleRate, sample_width,
-                             _ma_format_from_width(sample_width), duration, flac.totalPCMFrameCount, flac.maxBlockSize)
+                             _format_from_width(sample_width), duration, flac.totalPCMFrameCount, flac.maxBlockSize)
     finally:
         lib.drflac_close(flac)
 
@@ -232,7 +247,7 @@ def flac_read_file_s32(filename: str) -> DecodedSoundFile:
         samples = _create_int_array(4)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, ma_format_s32, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, SampleFormat.SIGNED32, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -250,7 +265,7 @@ def flac_read_file_s16(filename: str) -> DecodedSoundFile:
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -268,7 +283,7 @@ def flac_read_file_f32(filename: str) -> DecodedSoundFile:
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, ma_format_f32, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -285,7 +300,7 @@ def flac_read_s32(data: bytes) -> DecodedSoundFile:
         samples = _create_int_array(4)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, ma_format_s32, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, SampleFormat.SIGNED32, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -302,7 +317,7 @@ def flac_read_s16(data: bytes) -> DecodedSoundFile:
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -319,7 +334,7 @@ def flac_read_f32(data: bytes) -> DecodedSoundFile:
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, ma_format_f32, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drflac_free(memory)
 
@@ -357,7 +372,7 @@ def mp3_get_file_info(filename: str) -> SoundFileInfo:
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
         duration = num_frames / mp3.sampleRate
-        return SoundFileInfo(filename, "mp3", mp3.channels, mp3.sampleRate, 2, ma_format_s16, duration, num_frames, 0)
+        return SoundFileInfo(filename, "mp3", mp3.channels, mp3.sampleRate, 2, SampleFormat.SIGNED16, duration, num_frames, 0)
     finally:
         lib.drmp3_uninit(mp3)
 
@@ -373,7 +388,7 @@ def mp3_get_info(data: bytes) -> SoundFileInfo:
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
         duration = num_frames / mp3.sampleRate
-        return SoundFileInfo("<memory>", "mp3", mp3.channels, mp3.sampleRate, 2, ma_format_s16, duration, num_frames, 0)
+        return SoundFileInfo("<memory>", "mp3", mp3.channels, mp3.sampleRate, 2, SampleFormat.SIGNED16, duration, num_frames, 0)
     finally:
         lib.drmp3_uninit(mp3)
 
@@ -392,7 +407,7 @@ def mp3_read_file_f32(filename: str, want_nchannels: int = 0, want_sample_rate: 
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 4, ma_format_f32, samples)
+        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -411,7 +426,7 @@ def mp3_read_file_s16(filename: str, want_nchannels: int = 0, want_sample_rate: 
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 2, ma_format_s16, samples)
+        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -429,7 +444,7 @@ def mp3_read_f32(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 4, ma_format_f32, samples)
+        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -447,7 +462,7 @@ def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 2, ma_format_s16, samples)
+        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -486,8 +501,9 @@ def wav_get_file_info(filename: str) -> SoundFileInfo:
     try:
         duration = wav.totalPCMFrameCount / wav.sampleRate
         sample_width = wav.bitsPerSample // 8
+        # what about floating point format?
         return SoundFileInfo(filename, "wav", wav.channels, wav.sampleRate, sample_width,
-                             _ma_format_from_width(sample_width), duration, wav.totalPCMFrameCount, 0)
+                             _format_from_width(sample_width), duration, wav.totalPCMFrameCount, 0)
     finally:
         lib.drwav_close(wav)
 
@@ -500,8 +516,9 @@ def wav_get_info(data: bytes) -> SoundFileInfo:
     try:
         duration = wav.totalPCMFrameCount / wav.sampleRate
         sample_width = wav.bitsPerSample // 8
+        # what about floating point format?
         return SoundFileInfo("<memory>", "wav", wav.channels, wav.sampleRate, sample_width,
-                             _ma_format_from_width(sample_width), duration, wav.totalPCMFrameCount, 0)
+                             _format_from_width(sample_width), duration, wav.totalPCMFrameCount, 0)
     finally:
         lib.drwav_close(wav)
 
@@ -519,7 +536,7 @@ def wav_read_file_s32(filename: str) -> DecodedSoundFile:
         samples = _create_int_array(4)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, ma_format_s32, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, SampleFormat.SIGNED32, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -537,7 +554,7 @@ def wav_read_file_s16(filename: str) -> DecodedSoundFile:
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -555,7 +572,7 @@ def wav_read_file_f32(filename: str) -> DecodedSoundFile:
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, ma_format_f32, samples)
+        return DecodedSoundFile(filename, channels[0], sample_rate[0], 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -572,7 +589,7 @@ def wav_read_s32(data: bytes) -> DecodedSoundFile:
         samples = _create_int_array(4)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, ma_format_s32, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, SampleFormat.SIGNED32, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -589,7 +606,7 @@ def wav_read_s16(data: bytes) -> DecodedSoundFile:
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, ma_format_s16, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 2, SampleFormat.SIGNED16, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -606,7 +623,7 @@ def wav_read_f32(data: bytes) -> DecodedSoundFile:
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, ma_format_f32, samples)
+        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], 4, SampleFormat.FLOAT32, samples)
     finally:
         lib.drwav_free(memory)
 
@@ -640,6 +657,7 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     fmt.channels = sound.nchannels
     fmt.sampleRate = sound.sample_rate
     fmt.bitsPerSample = sound.sample_width * 8
+    # what about floating point format?
     filename_bytes = filename.encode(sys.getfilesystemencoding())
     pwav = lib.drwav_open_file_write_sequential(filename_bytes, fmt, sound.num_frames * sound.nchannels)
     if pwav == ffi.NULL:
@@ -665,11 +683,6 @@ def _get_filename_bytes(filename: str) -> bytes:
     return filename2.encode(sys.getfilesystemencoding())
 
 
-# MiniAudio API follows
-PLAYBACK = 'playback'
-CAPTURE = 'capture'
-
-
 class Devices:
     """Query the audio playback and record devices that miniaudio provides"""
     def __init__(self) -> None:
@@ -692,10 +705,10 @@ class Devices:
             dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
             info = {
                 "name": ffi.string(ma_device_info.name).decode(),
-                "type": PLAYBACK,
+                "type": DeviceType.PLAYBACK,
                 "id": dev_id
             }
-            info.update(self._get_info(PLAYBACK, ma_device_info))
+            info.update(self._get_info(DeviceType.PLAYBACK, ma_device_info))
             devs.append(info)
         return devs
 
@@ -712,22 +725,16 @@ class Devices:
             dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
             info = {
                 "name": ffi.string(ma_device_info.name).decode(),
-                "type": CAPTURE,
+                "type": DeviceType.CAPTURE,
                 "id": dev_id
             }
-            info.update(self._get_info(CAPTURE, ma_device_info))
+            info.update(self._get_info(DeviceType.CAPTURE, ma_device_info))
             devs.append(info)
         return devs
 
-    def _get_info(self, device_type: str, device_info: ffi.CData) -> Dict[str, Any]:
+    def _get_info(self, device_type: DeviceType, device_info: ffi.CData) -> Dict[str, Any]:
         # obtain detailed info about the device
-        if device_type == PLAYBACK:
-            device_type_i = lib.ma_device_type_playback
-        elif device_type == CAPTURE:
-            device_type_i = lib.ma_device_type_capture
-        else:
-            raise ValueError("wrong device type")
-        lib.ma_context_get_device_info(self._context, device_type_i, ffi.addressof(device_info.id),
+        lib.ma_context_get_device_info(self._context, device_type.value, ffi.addressof(device_info.id),
                                        0, ffi.addressof(device_info))
         formats = set(device_info.formats[0:device_info.formatCount])
         return {
@@ -742,67 +749,69 @@ class Devices:
         lib.ma_context_uninit(self._context)
 
 
-def _decode_ma_format(ma_output_format: int) -> Tuple[int, array.array]:
-    if ma_output_format == ma_format_f32:
+def _width_from_format(sampleformat: SampleFormat) -> Tuple[int, array.array]:
+    if sampleformat == SampleFormat.FLOAT32:
         return 4, array.array('f')
-    elif ma_output_format == ma_format_u8:
+    elif sampleformat == SampleFormat.UNSIGNED8:
         return 1, _create_int_array(1)
-    elif ma_output_format == ma_format_s16:
+    elif sampleformat == SampleFormat.SIGNED16:
         return 2, _create_int_array(2)
-    elif ma_output_format == ma_format_s32:
+    elif sampleformat == SampleFormat.SIGNED32:
         return 4, _create_int_array(4)
     else:
-        raise ValueError("unsupported miniaudio sample format", ma_output_format)
+        raise ValueError("unsupported sample format", sampleformat)
 
 
-def _ma_format_from_width(sample_width: int, is_float: bool = False) -> int:
+def _format_from_width(sample_width: int, is_float: bool = False) -> SampleFormat:
     if is_float:
-        return ma_format_f32
+        return SampleFormat.FLOAT32
     elif sample_width == 1:
-        return ma_format_u8
+        return SampleFormat.UNSIGNED8
     elif sample_width == 2:
-        return ma_format_s16
+        return SampleFormat.SIGNED16
+    elif sample_width == 3:
+        return SampleFormat.SIGNED24
     elif sample_width == 4:
-        return ma_format_s32
+        return SampleFormat.SIGNED32
     else:
-        raise ValueError("unsupported sample_width", sample_width)
+        raise ValueError("unsupported sample width", sample_width)
 
 
-def decode_file(filename: str, ma_output_format: int = ma_format_s16,
+def decode_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED16,
                 nchannels: int = 2, sample_rate: int = 44100) -> DecodedSoundFile:
     """Convenience function to decode any supported audio file to raw PCM samples in your chosen format."""
-    sample_width, samples = _decode_ma_format(ma_output_format)
+    sample_width, samples = _width_from_format(output_format)
     filenamebytes = _get_filename_bytes(filename)
     frames = ffi.new("ma_uint64 *")
     data = ffi.new("void **")
-    decoder_config = lib.ma_decoder_config_init(ma_output_format, nchannels, sample_rate)
+    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     result = lib.ma_decode_file(filenamebytes, ffi.addressof(decoder_config), frames, data)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to decode file", result)
     buffer = ffi.buffer(data[0], frames[0] * nchannels * sample_width)
     samples.frombytes(buffer)
-    return DecodedSoundFile(filename, nchannels, sample_rate, sample_width, ma_output_format, samples)
+    return DecodedSoundFile(filename, nchannels, sample_rate, sample_width, output_format, samples)
 
 
-def decode(data: bytes, ma_output_format: int = ma_format_s16,
+def decode(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16,
            nchannels: int = 2, sample_rate: int = 44100) -> DecodedSoundFile:
     """Convenience function to decode any supported audio file in memory to raw PCM samples in your chosen format."""
-    sample_width, samples = _decode_ma_format(ma_output_format)
+    sample_width, samples = _width_from_format(output_format)
     frames = ffi.new("ma_uint64 *")
     memory = ffi.new("void **")
-    decoder_config = lib.ma_decoder_config_init(ma_output_format, nchannels, sample_rate)
+    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     result = lib.ma_decode_memory(data, len(data), ffi.addressof(decoder_config), frames, memory)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to decode data", result)
     buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
     samples.frombytes(buffer)
-    return DecodedSoundFile("<memory>", nchannels, sample_rate, sample_width, ma_output_format, samples)
+    return DecodedSoundFile("<memory>", nchannels, sample_rate, sample_width, output_format, samples)
 
 
-def _samples_generator(frames_to_read: int, nchannels: int, ma_output_format: int,
+def _samples_generator(frames_to_read: int, nchannels: int, output_format: SampleFormat,
                        decoder: ffi.CData, data: Any) -> Generator[array.array, int, None]:
     _reference = data    # make sure any data passed in is not garbage collected
-    sample_width, samples_proto = _decode_ma_format(ma_output_format)
+    sample_width, samples_proto = _width_from_format(output_format)
     allocated_buffer_frames = max(frames_to_read, 16384)
     try:
         decodebuffer = ffi.new("int8_t[]", allocated_buffer_frames * nchannels * sample_width)
@@ -823,7 +832,7 @@ def _samples_generator(frames_to_read: int, nchannels: int, ma_output_format: in
         lib.ma_decoder_uninit(decoder)
 
 
-def stream_file(filename: str, ma_output_format: int = ma_format_s16, nchannels: int = 2,
+def stream_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                 sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, None]:
     """
     Convenience generator function to decode and stream any supported audio file
@@ -835,17 +844,17 @@ def stream_file(filename: str, ma_output_format: int = ma_format_s16, nchannels:
     """
     filenamebytes = _get_filename_bytes(filename)
     decoder = ffi.new("ma_decoder *")
-    decoder_config = lib.ma_decoder_config_init(ma_output_format, nchannels, sample_rate)
+    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     result = lib.ma_decoder_init_file(filenamebytes, ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to decode file", result)
-    g = _samples_generator(frames_to_read, nchannels, ma_output_format, decoder, None)
+    g = _samples_generator(frames_to_read, nchannels, output_format, decoder, None)
     dummy = next(g)
     assert len(dummy) == 0
     return g
 
 
-def stream_memory(data: bytes, ma_output_format: int = ma_format_s16, nchannels: int = 2,
+def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                   sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, None]:
     """
     Convenience generator function to decode and stream any supported audio file in memory
@@ -856,11 +865,11 @@ def stream_memory(data: bytes, ma_output_format: int = ma_format_s16, nchannels:
     wants a variable number of frames per call.
     """
     decoder = ffi.new("ma_decoder *")
-    decoder_config = lib.ma_decoder_config_init(ma_output_format, nchannels, sample_rate)
+    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     result = lib.ma_decoder_init_memory(data, len(data), ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to decode memory", result)
-    g = _samples_generator(frames_to_read, nchannels, ma_output_format, decoder, data)
+    g = _samples_generator(frames_to_read, nchannels, output_format, decoder, data)
     dummy = next(g)
     assert len(dummy) == 0
     return g
@@ -870,7 +879,7 @@ _callback_data = {}     # type: Dict[int, Union[PlaybackDevice, CaptureDevice, D
 
 
 @ffi.def_extern()
-def internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
+def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
     if framecount == 0 or not device.pUserData:
         return
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
@@ -921,12 +930,12 @@ class AbstractDevice:
 
 class CaptureDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio capture (recording)."""
-    def __init__(self, ma_input_format: int = ma_format_s16, nchannels: int = 2,
+    def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
                  ) -> None:
         super().__init__()
-        self.format = ma_input_format
-        self.sample_width, self.samples_array_proto = _decode_ma_format(ma_input_format)
+        self.format = input_format
+        self.sample_width, _ = _width_from_format(input_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
@@ -934,9 +943,9 @@ class CaptureDevice(AbstractDevice):
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_capture)
         lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec,
-                                        0, 0, 0, self.format, self.nchannels, ffi.NULL, device_id or ffi.NULL)
+                                        0, 0, 0, self.format.value, self.nchannels, ffi.NULL, device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
-        self._devconfig.dataCallback = lib.internal_data_callback
+        self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None  # type: Optional[CaptureCallbackGeneratorType]
         result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
@@ -968,12 +977,12 @@ class CaptureDevice(AbstractDevice):
 
 class PlaybackDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio playback."""
-    def __init__(self, ma_output_format: int = ma_format_s16, nchannels: int = 2,
+    def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
                  ) -> None:
         super().__init__()
-        self.format = ma_output_format
-        self.sample_width, self.samples_array_proto = _decode_ma_format(ma_output_format)
+        self.format = output_format
+        self.sample_width, _ = _width_from_format(output_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
@@ -981,9 +990,9 @@ class PlaybackDevice(AbstractDevice):
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_playback)
         lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec,
-                                        0, self.format, self.nchannels, 0, 0, device_id or ffi.NULL, ffi.NULL)
+                                        0, self.format.value, self.nchannels, 0, 0, device_id or ffi.NULL, ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
-        self._devconfig.dataCallback = lib.internal_data_callback
+        self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None   # type: Optional[PlaybackCallbackGeneratorType]
         result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
@@ -1018,19 +1027,17 @@ class PlaybackDevice(AbstractDevice):
 
 class DuplexStream(AbstractDevice):
     """Joins a capture device and a playback device."""
-    def __init__(self, playback_format: int = ma_format_s16,
-                 playback_channels: int = 2, capture_format: int = ma_format_s16,
+    def __init__(self, playback_format: SampleFormat = SampleFormat.SIGNED16,
+                 playback_channels: int = 2, capture_format: SampleFormat = SampleFormat.SIGNED16,
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None
                  ) -> None:
         super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
-        self.sample_width, self.samples_array_proto = _decode_ma_format(capture_format)
-
+        self.sample_width, _ = _width_from_format(capture_format)
         self.capture_channels = capture_channels
         self.playback_channels = playback_channels
-
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
         _callback_data[id(self)] = self
@@ -1039,10 +1046,10 @@ class DuplexStream(AbstractDevice):
 
         lib.ma_device_config_set_params(
             ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec, 0,
-            playback_format, playback_channels, capture_format, capture_channels,
+            playback_format.value, playback_channels, capture_format.value, capture_channels,
             playback_device_id or ffi.NULL, capture_device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
-        self._devconfig.dataCallback = lib.internal_data_callback
+        self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
 
         result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
@@ -1089,13 +1096,13 @@ def _bytes_from_generator_samples(samples: Union[array.array, memoryview, bytes]
 class WavFileReadStream(io.RawIOBase):
     """An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer"""
     def __init__(self, pcm_sample_gen: PlaybackCallbackGeneratorType, sample_rate: int, nchannels: int,
-                 ma_output_format: int, max_frames: int = 0) -> None:
+                 output_format: SampleFormat, max_frames: int = 0) -> None:
         self.sample_gen = pcm_sample_gen
         self.sample_rate = sample_rate
         self.nchannels = nchannels
-        self.format = ma_output_format
+        self.format = output_format
         self.max_frames = max_frames
-        self.sample_width, _ = _decode_ma_format(ma_output_format)
+        self.sample_width, _ = _width_from_format(output_format)
         self.max_bytes = (max_frames * nchannels * self.sample_width) or sys.maxsize
         self.bytes_done = 0
         # create WAVE header

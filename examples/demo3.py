@@ -27,7 +27,7 @@ def stream_pcm(source):
 
 
 filename = samples_path("music.m4a")   # AAC encoded file
-device = miniaudio.PlaybackDevice(ma_output_format=miniaudio.ma_format_s16,
+device = miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
                                   nchannels=channels, sample_rate=sample_rate)
 ffmpeg = subprocess.Popen(["ffmpeg", "-v", "fatal", "-hide_banner", "-nostdin",
                            "-i", filename, "-f", "s16le", "-acodec", "pcm_s16le",
