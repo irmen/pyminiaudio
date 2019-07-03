@@ -18,3 +18,4 @@ install:
 script:
   - python setup.py test
   - python -E -Wall -bb -c 'import miniaudio'
+
