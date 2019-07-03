@@ -885,8 +885,9 @@ GeneratorTypes = Union[PlaybackCallbackGeneratorType, CaptureCallbackGeneratorTy
 
 
 class AbstractDevice:
-    callback_generator: Optional[GeneratorTypes]
-    _device: ffi.CData
+    def __init__(self):
+        self.callback_generator = None          # type: Optional[GeneratorTypes]
+        self._device = ffi.new("ma_device *")
 
     def __del__(self) -> None:
         self.close()
@@ -923,12 +924,12 @@ class CaptureDevice(AbstractDevice):
     def __init__(self, ma_input_format: int = ma_format_s16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
                  ) -> None:
+        super().__init__()
         self.format = ma_input_format
         self.sample_width, self.samples_array_proto = _decode_ma_format(ma_input_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        self._device = ffi.new("ma_device *")
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_capture)
@@ -970,12 +971,12 @@ class PlaybackDevice(AbstractDevice):
     def __init__(self, ma_output_format: int = ma_format_s16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
                  ) -> None:
+        super().__init__()
         self.format = ma_output_format
         self.sample_width, self.samples_array_proto = _decode_ma_format(ma_output_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        self._device = ffi.new("ma_device *")
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_playback)
@@ -1022,6 +1023,7 @@ class DuplexStream(AbstractDevice):
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None
                  ) -> None:
+        super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
         self.sample_width, self.samples_array_proto = _decode_ma_format(capture_format)
@@ -1031,7 +1033,6 @@ class DuplexStream(AbstractDevice):
 
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        self._device = ffi.new("ma_device *")
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_duplex)
