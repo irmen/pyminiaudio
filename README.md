@@ -19,11 +19,12 @@ This module provides:
 
 *Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).* 
 
-Currently, it is mostly distributed in source form so you need a C compiler to build and install this.
+The library is primarily distributed in source form so you need a C compiler to build and install this
+(note: the setup script takes care of the actual compilation process, no need to worry about compiling things yourself).
 For Linux and Mac this shouldn't be a problem. For Windows users, if the correct binary install
-is not available on pypi, you'll have to compile it as well which may be a bit of a hassle 
-on this platform: you have to make sure that the required tools (Visual Studio or 
-the C++ build tools) are installed that allow you to compile Python extension modules.
+is not available on pypi, you'll have to get it to compile as well which may be a bit of a hassle 
+on this platform. You have to make sure that the required tools that allow you to compile Python extension modules
+are installed (Visual Studio or the VC++ build tools).
  
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
