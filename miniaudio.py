@@ -14,6 +14,7 @@ import io
 import array
 import struct
 import inspect
+import math
 from enum import Enum
 from typing import Generator, List, Tuple, Dict, Optional, Union, Any
 from _miniaudio import ffi, lib
@@ -36,10 +37,25 @@ class DeviceType(Enum):
     DUPLEX = lib.ma_device_type_duplex
 
 
+class DitherMode(Enum):
+    NONE = lib.ma_dither_mode_none
+    RECTANGLE = lib.ma_dither_mode_rectangle
+    TRIANGLE = lib.ma_dither_mode_triangle
+
+
+class ChannelMixMode(Enum):
+    RECTANGULAR = lib.ma_channel_mix_mode_rectangular
+    SIMPLE = lib.ma_channel_mix_mode_simple
+    CUSTOMWEIGHTS = lib.ma_channel_mix_mode_custom_weights
+    PLANARBLEND = lib.ma_channel_mix_mode_planar_blend
+    DEFAULT = lib.ma_channel_mix_mode_default
+
+
 class DecodedSoundFile:
     """Contains the PCM samples and various properties of a fully decoded audio file."""
     def __init__(self, name: str, nchannels: int, sample_rate: int, sample_width: int,
                  sample_format: SampleFormat, samples: array.array) -> None:
+        # XXX remove sample_width param, get it from the format
         self.name = name
         self.nchannels = nchannels
         self.sample_rate = sample_rate
@@ -55,6 +71,7 @@ class SoundFileInfo:
     """Contains the properties of an audio file."""
     def __init__(self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_width: int,
                  sample_format: SampleFormat, duration: float, num_frames: int, max_frame_size: int) -> None:
+        # XXX remove sample_width param, get it from the format
         self.name = name
         self.file_format = file_format
         self.nchannels = nchannels
@@ -372,7 +389,8 @@ def mp3_get_file_info(filename: str) -> SoundFileInfo:
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
         duration = num_frames / mp3.sampleRate
-        return SoundFileInfo(filename, "mp3", mp3.channels, mp3.sampleRate, 2, SampleFormat.SIGNED16, duration, num_frames, 0)
+        return SoundFileInfo(filename, "mp3", mp3.channels, mp3.sampleRate, 2,
+                             SampleFormat.SIGNED16, duration, num_frames, 0)
     finally:
         lib.drmp3_uninit(mp3)
 
@@ -388,7 +406,8 @@ def mp3_get_info(data: bytes) -> SoundFileInfo:
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
         duration = num_frames / mp3.sampleRate
-        return SoundFileInfo("<memory>", "mp3", mp3.channels, mp3.sampleRate, 2, SampleFormat.SIGNED16, duration, num_frames, 0)
+        return SoundFileInfo("<memory>", "mp3", mp3.channels, mp3.sampleRate, 2,
+                             SampleFormat.SIGNED16, duration, num_frames, 0)
     finally:
         lib.drmp3_uninit(mp3)
 
@@ -407,7 +426,8 @@ def mp3_read_file_f32(filename: str, want_nchannels: int = 0, want_sample_rate: 
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 4, SampleFormat.FLOAT32, samples)
+        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 4,
+                                SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -426,7 +446,8 @@ def mp3_read_file_s16(filename: str, want_nchannels: int = 0, want_sample_rate: 
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 2, SampleFormat.SIGNED16, samples)
+        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate, 2,
+                                SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -444,7 +465,8 @@ def mp3_read_f32(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
         samples = array.array('f')
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 4, SampleFormat.FLOAT32, samples)
+        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 4,
+                                SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -462,7 +484,8 @@ def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
         samples = _create_int_array(2)
         buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 2, SampleFormat.SIGNED16, samples)
+        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate, 2,
+                                SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory)
 
@@ -873,6 +896,33 @@ def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED
     dummy = next(g)
     assert len(dummy) == 0
     return g
+
+
+def convert_sample_format(from_fmt: SampleFormat, sourcedata: bytes, to_fmt: SampleFormat,
+                          dither: DitherMode = DitherMode.NONE) -> bytearray:
+    """Convert a raw buffer of pcm samples to another sample format.
+    The result is returned as another raw pcm sample buffer"""
+    sample_width, _ = _width_from_format(from_fmt)
+    num_samples = len(sourcedata) // sample_width
+    sample_width, _ = _width_from_format(to_fmt)
+    buffer = bytearray(sample_width * num_samples)
+    lib.ma_pcm_convert(ffi.from_buffer(buffer), to_fmt.value, sourcedata, from_fmt.value, num_samples, dither.value)
+    return buffer
+
+
+def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerate: int, sourcedata: bytes,
+                   to_fmt: SampleFormat, to_numchannels: int, to_samplerate: int) -> bytearray:
+    """Convert audio frames in source sample format with a certain number of channels,
+    to another sample format and possibly down/upmixing the number of channels as well."""
+    sample_width, _ = _width_from_format(from_fmt)
+    num_frames = int(len(sourcedata) / from_numchannels / sample_width)
+    sample_width, _ = _width_from_format(to_fmt)
+    output_frame_count = lib.ma_calculate_frame_count_after_src(to_samplerate, from_samplerate, num_frames)
+    # XXX segfault problem sometimes because buffer is too small? See https://github.com/dr-soft/miniaudio/issues/76
+    buffer = bytearray(output_frame_count * sample_width * to_numchannels)
+    frame_count = lib.ma_convert_frames(ffi.from_buffer(buffer), to_fmt.value, to_numchannels, to_samplerate,
+                                        sourcedata, from_fmt.value, from_numchannels, from_samplerate, num_frames)
+    return buffer
 
 
 _callback_data = {}     # type: Dict[int, Union[PlaybackDevice, CaptureDevice, DuplexStream]]
