@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.5.dev0"
+__version__ = "1.5"
 
 
 import sys
@@ -17,6 +17,10 @@ import inspect
 from enum import Enum
 from typing import Generator, List, Tuple, Dict, Optional, Union, Any
 from _miniaudio import ffi, lib
+try:
+    import numpy
+except ImportError:
+    numpy = None
 
 lib.init_miniaudio()
 
@@ -1048,7 +1052,8 @@ class PlaybackDevice(AbstractDevice):
     def start(self, callback_generator: PlaybackCallbackGeneratorType) -> None:     # type: ignore
         """Start the audio device: playback begins. The audio data is provided by the given callback generator.
         The generator gets sent the required number of frames and should yield the sample data
-        as raw bytes or as an array.array.  (it should already be started before passing it in)"""
+        as raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
+        The generator should already be started before passing it in."""
         return super().start(callback_generator)
 
     def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
@@ -1129,11 +1134,13 @@ class DuplexStream(AbstractDevice):
 
 
 def _bytes_from_generator_samples(samples: Union[array.array, memoryview, bytes]) -> bytes:
+    # convert any non-bytes generator result to raw bytes
     if isinstance(samples, array.array):
         return memoryview(samples).cast('B')       # type: ignore
     elif isinstance(samples, memoryview) and samples.itemsize != 1:
         return samples.cast('B')    # type: ignore
-    # TODO numpy array support?
+    elif numpy and isinstance(samples, numpy.ndarray):
+        return samples.tobytes()
     return samples      # type: ignore
 
 
