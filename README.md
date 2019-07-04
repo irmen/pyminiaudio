@@ -354,6 +354,22 @@ variable number of frames per call.
 > An audio device provided by miniaudio, for audio capture (recording).
 
 
+> *method*  ``close  (self) ``
+
+> > Halt playback or capture and close down the device.
+
+
+> *method*  ``start  (self, callback_generator: Generator[NoneType, Union[bytes, array.array], NoneType]) ``
+
+> > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
+callback generator as raw bytes. (it should already be started before)
+
+
+> *method*  ``stop  (self) ``
+
+> > Halt playback or capture.
+
+
 *class*  ``DecodeError``
 
 ``DecodeError  (self, /, *args, **kwargs)``
@@ -375,11 +391,38 @@ variable number of frames per call.
 > Query the audio playback and record devices that miniaudio provides
 
 
+> *method*  ``get_captures  (self) -> List[Dict[str, Any]]``
+
+> > Get a list of capture devices and some details about them
+
+
+> *method*  ``get_playbacks  (self) -> List[Dict[str, Any]]``
+
+> > Get a list of playback devices and some details about them
+
+
 *class*  ``DuplexStream``
 
 ``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) ``
 
 > Joins a capture device and a playback device.
+
+
+> *method*  ``close  (self) ``
+
+> > Halt playback or capture and close down the device.
+
+
+> *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], Union[bytes, array.array], NoneType]) ``
+
+> > Start the audio device: playback and capture begin. The audio data for playback is provided by
+the given callback generator, which is sent the recorded audio data at the same time. (it should
+already be started before passing it in)
+
+
+> *method*  ``stop  (self) ``
+
+> > Halt playback or capture.
 
 
 *class*  ``MiniaudioError``
@@ -396,6 +439,24 @@ variable number of frames per call.
 > An audio device provided by miniaudio, for audio playback.
 
 
+> *method*  ``close  (self) ``
+
+> > Halt playback or capture and close down the device.
+
+
+> *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], int, NoneType]) ``
+
+> > Start the audio device: playback begins. The audio data is provided by the given callback
+generator. The generator gets sent the required number of frames and should yield the sample data as
+raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
+The generator should already be started before passing it in.
+
+
+> *method*  ``stop  (self) ``
+
+> > Halt playback or capture.
+
+
 *class*  ``SoundFileInfo``
 
 ``SoundFileInfo  (self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int) ``
@@ -408,6 +469,16 @@ variable number of frames per call.
 ``WavFileReadStream  (self, pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) ``
 
 > An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
+
+
+> *method*  ``close  (self) ``
+
+> > Close the file
+
+
+> *method*  ``read  (self, amount: int = 9223372036854775807) -> Union[bytes, NoneType]``
+
+> > Read up to the given amount of bytes from the file.
 
 
 

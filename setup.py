@@ -35,27 +35,26 @@ if __name__ == "__main__":
     )
 
 
-def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> str:
+def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
     import importlib
     import inspect
     module = importlib.import_module(modulename)
     documentable_classes = []
     documentable_enums = []
     documentable_functions = []
-    for name, item in inspect.getmembers(module):
-        if inspect.isclass(item) or inspect.isfunction(item):
-            # consider only non-private classes and functions from the module itself
-            if item.__module__ == modulename and not item.__name__.startswith('_'):
-                if inspect.isclass(item):
-                    if issubclass(item, enum.Enum):
-                        documentable_enums.append((item.__name__, item))
-                    else:
-                        documentable_classes.append((item.__name__, item))
-                elif inspect.isfunction(item):
-                    documentable_functions.append((item.__name__, item))
+    for name, item in inspect.getmembers(module, lambda x: inspect.isclass(x) or inspect.isfunction(x)):
+        # consider only non-private classes and functions from the module itself
+        if item.__module__ == modulename and not item.__name__.startswith('_'):
+            if inspect.isclass(item):
+                if issubclass(item, enum.Enum):
+                    documentable_enums.append((item.__name__, item))
+                else:
+                    documentable_classes.append((item.__name__, item))
+            elif inspect.isfunction(item):
+                documentable_functions.append((item.__name__, item))
     print("\n\n===================  GENERATED API DOCS  =================\n\n")
     for name, func in sorted(documentable_functions):
-        doc = inspect.getdoc(func)
+        doc = inspect.cleandoc(func.__doc__ or "")
         if not doc:
             continue    # don't output if no docstring
         sig = str(inspect.signature(func))
@@ -66,7 +65,7 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> str:
             print(line)
         print("\n")
     for name, enumk in sorted(documentable_enums):
-        doc = inspect.getdoc(enumk)
+        doc = inspect.cleandoc(enumk.__doc__ or "")
         if not doc:
             continue    # don't output if no docstring
         print("*enum class*  ``{}``".format(name))
@@ -75,7 +74,7 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> str:
             print(line)
         print("\n")
     for name, klass in sorted(documentable_classes):
-        doc = inspect.getdoc(klass)
+        doc = inspect.cleandoc(klass.__doc__ or "")
         if not doc:
             continue    # don't output if no docstring
         sig = str(inspect.signature(klass.__init__))
@@ -86,4 +85,16 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> str:
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
+        # methods
+        for mname, method in inspect.getmembers(klass, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
+            doc = inspect.cleandoc(method.__doc__ or "")
+            if mname.startswith('_') or not doc:
+                continue   # don't output if private or no docstring
+            sig = str(inspect.signature(method))
+            if sig.endswith("-> None"):
+                sig = sig[:-7]
+            print("> *method*  ``{}  {}``\n".format(mname, sig))
+            for line in textwrap.wrap("> > "+doc, width):
+                print(line)
+            print("\n")
     print()

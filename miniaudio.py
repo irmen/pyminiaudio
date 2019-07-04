@@ -954,6 +954,7 @@ class AbstractDevice:
         self.close()
 
     def start(self, callback_generator: GeneratorTypes) -> None:
+        """Start playback or capture, using the given callback generator (should already been started)"""
         if self.callback_generator:
             raise MiniaudioError("can't start an already started device")
         if not inspect.isgenerator(callback_generator):
@@ -1178,6 +1179,7 @@ class WavFileReadStream(io.RawIOBase):
         lib.drflac_free(data[0])
 
     def read(self, amount: int = sys.maxsize) -> Optional[bytes]:
+        """Read up to the given amount of bytes from the file."""
         if self.bytes_done >= self.max_bytes or not self.sample_gen:
             return b""
         while len(self.buffered) < amount:
@@ -1194,4 +1196,5 @@ class WavFileReadStream(io.RawIOBase):
         return result
 
     def close(self) -> None:
+        """Close the file"""
         pass
