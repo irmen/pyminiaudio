@@ -31,7 +31,7 @@ Software license for these Python bindings, miniaudio and the decoders: MIT
 
 ## Todo
 
-- the various format conversion functions aren't properly exposed yet.
+- wrap the .mod and .xm player API
 
 
 ## Examples

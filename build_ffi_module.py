@@ -606,7 +606,12 @@ ffibuilder.set_source("_miniaudio", """
     #include "miniaudio/stb_vorbis.c"
     #endif
 
+/**** TODO for future version:
+    #include "miniaudio/jar_xm.h"
+    #include "miniaudio/jar_mod.h"
+*****/
     #include "miniaudio/miniaudio.h"
+
 
     /* low-level initialization */
     void init_miniaudio(void);

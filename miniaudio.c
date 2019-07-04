@@ -20,10 +20,10 @@
 
 #define MINIAUDIO_IMPLEMENTATION
 /* #define MA_NO_DECODING */
-#define MA_NO_AAUDIO
-#define MA_NO_OPENSL
+/* #define MA_NO_AAUDIO */
+/* #define MA_NO_OPENSL */
+/* #define MA_NO_JACK */
 #define MA_NO_WEBAUDIO
-#define MA_NO_JACK
 #include "miniaudio/miniaudio.h"
 
 
@@ -73,6 +73,13 @@ void ma_device_config_set_params(ma_device_config* config, ma_uint32 sample_rate
     config->capture.pDeviceID = capture_device_id;
     config->playback.pDeviceID = playback_device_id;
 }
+
+/**** TODO for a future version:
+#define JAR_XM_IMPLEMENTATION
+#include "miniaudio/jar_xm.h"
+#define JAR_MOD_IMPLEMENTATION
+#include "miniaudio/jar_mod.h"
+****/
 
 
 /* Nothing more to do here; all the decoder source is in their own single source/include file */
