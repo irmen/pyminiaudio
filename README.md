@@ -31,10 +31,6 @@ are installed (Visual Studio or the VC++ build tools).
  
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
-## Todo
-
-- wrap the .mod and .xm player API
-
 ## Synthesizer
 
 If you like this library you may also be interested in my software FM synthesizer: https://pypi.org/project/synthplayer/

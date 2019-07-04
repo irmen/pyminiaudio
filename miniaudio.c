@@ -74,10 +74,5 @@ void ma_device_config_set_params(ma_device_config* config, ma_uint32 sample_rate
     config->playback.pDeviceID = playback_device_id;
 }
 
-#define JAR_XM_IMPLEMENTATION
-#include "miniaudio/jar_xm.h"
-#define JAR_MOD_IMPLEMENTATION
-#include "miniaudio/jar_mod.h"
-
 
 /* Nothing more to do here; all the decoder source is in their own single source/include file */
