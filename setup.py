@@ -35,45 +35,55 @@ if __name__ == "__main__":
     )
 
 
-def make_md_docs(modulename="miniaudio"):
+def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> str:
     import importlib
     import inspect
     module = importlib.import_module(modulename)
     documentable_classes = []
+    documentable_enums = []
     documentable_functions = []
     for name, item in inspect.getmembers(module):
         if inspect.isclass(item) or inspect.isfunction(item):
             # consider only non-private classes and functions from the module itself
             if item.__module__ == modulename and not item.__name__.startswith('_'):
                 if inspect.isclass(item):
-                    documentable_classes.append(item)
+                    if issubclass(item, enum.Enum):
+                        documentable_enums.append((item.__name__, item))
+                    else:
+                        documentable_classes.append((item.__name__, item))
                 elif inspect.isfunction(item):
-                    documentable_functions.append(item)
+                    documentable_functions.append((item.__name__, item))
     print("\n\n===================  GENERATED API DOCS  =================\n\n")
-    width = 100
-    for f in documentable_functions:
-        doc = inspect.getdoc(f) or "No documentation available"
-        sig = inspect.signature(f)
-        print("*function*  ``{name}  {sig}``".format(name=f.__name__, sig=sig))
-        print()
+    for name, func in sorted(documentable_functions):
+        doc = inspect.getdoc(func)
+        if not doc:
+            continue    # don't output if no docstring
+        sig = str(inspect.signature(func))
+        if sig.endswith("-> None"):
+            sig = sig[:-7]
+        print("*function*  ``{}  {}``\n".format(name, sig))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
-    for c in documentable_classes:
-        if issubclass(c, enum.Enum):
-            print("*enum class*  ``{name}``".format(name=c.__name__))
-            print(" names:  ``{}``\n".format("`` ``".join(e.name for e in list(c))))
-            doc = inspect.getdoc(c) or "No documentation available"
-            for line in textwrap.wrap("> "+doc, width):
-                print(line)
-            print("\n")
-        else:
-            doc = inspect.getdoc(c) or "No documentation available"
-            sig = inspect.signature(c.__init__)
-            print("*class*  ``{}``\n".format(c.__name__))
-            print("``{name}  {sig}``\n".format(name=c.__name__, sig=sig))
-            print()
-            for line in textwrap.wrap("> "+doc, width):
-                print(line)
-            print("\n")
+    for name, enumk in sorted(documentable_enums):
+        doc = inspect.getdoc(enumk)
+        if not doc:
+            continue    # don't output if no docstring
+        print("*enum class*  ``{}``".format(name))
+        print(" names:  ``{}``\n".format("`` ``".join(e.name for e in list(enumk))))
+        for line in textwrap.wrap("> "+doc, width):
+            print(line)
+        print("\n")
+    for name, klass in sorted(documentable_classes):
+        doc = inspect.getdoc(klass)
+        if not doc:
+            continue    # don't output if no docstring
+        sig = str(inspect.signature(klass.__init__))
+        if sig.endswith("-> None"):
+            sig = sig[:-7]
+        print("*class*  ``{}``\n".format(name))
+        print("``{}  {}``\n".format(name, sig))
+        for line in textwrap.wrap("> "+doc, width):
+            print(line)
+        print("\n")
     print()

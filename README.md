@@ -116,6 +116,7 @@ ffmpeg.terminate()
 
 ## API
 
+
 *function*  ``convert_frames  (from_fmt: miniaudio.SampleFormat, from_numchannels: int, from_samplerate: int, sourcedata: bytes, to_fmt: miniaudio.SampleFormat, to_numchannels: int, to_samplerate: int) -> bytearray``
 
 > Convert audio frames in source sample format with a certain number of channels, to another sample
@@ -317,25 +318,9 @@ variable number of frames per call.
 > Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments.
 
 
-*function*  ``wav_write_file  (filename: str, sound: miniaudio.DecodedSoundFile) -> None``
+*function*  ``wav_write_file  (filename: str, sound: miniaudio.DecodedSoundFile) ``
 
 > Writes the pcm sound to a WAV file
-
-
-*class*  ``AbstractDevice``
-
-``AbstractDevice  (self)``
-
-
-> No documentation available
-
-
-*class*  ``CaptureDevice``
-
-``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
-
-
-> An audio device provided by miniaudio, for audio capture (recording).
 
 
 *enum class*  ``ChannelMixMode``
@@ -344,34 +329,10 @@ variable number of frames per call.
 > How to mix channels when converting
 
 
-*class*  ``DecodeError``
-
-``DecodeError  (self, /, *args, **kwargs)``
-
-
-> When something went wrong during decoding an audio file.
-
-
-*class*  ``DecodedSoundFile``
-
-``DecodedSoundFile  (self, name: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, samples: array.array) -> None``
-
-
-> Contains various properties and also the raw PCM samples of a fully decoded audio file.
-
-
 *enum class*  ``DeviceType``
  names:  ``PLAYBACK`` ``CAPTURE`` ``DUPLEX``
 
 > Type of audio device
-
-
-*class*  ``Devices``
-
-``Devices  (self) -> None``
-
-
-> Query the audio playback and record devices that miniaudio provides
 
 
 *enum class*  ``DitherMode``
@@ -380,10 +341,43 @@ variable number of frames per call.
 > How to dither when converting
 
 
+*enum class*  ``SampleFormat``
+ names:  ``UNKNOWN`` ``UNSIGNED8`` ``SIGNED16`` ``SIGNED24`` ``SIGNED32`` ``FLOAT32``
+
+> Sample format in memory
+
+
+*class*  ``CaptureDevice``
+
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) ``
+
+> An audio device provided by miniaudio, for audio capture (recording).
+
+
+*class*  ``DecodeError``
+
+``DecodeError  (self, /, *args, **kwargs)``
+
+> When something went wrong during decoding an audio file.
+
+
+*class*  ``DecodedSoundFile``
+
+``DecodedSoundFile  (self, name: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, samples: array.array) ``
+
+> Contains various properties and also the raw PCM samples of a fully decoded audio file.
+
+
+*class*  ``Devices``
+
+``Devices  (self) ``
+
+> Query the audio playback and record devices that miniaudio provides
+
+
 *class*  ``DuplexStream``
 
-``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
-
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) ``
 
 > Joins a capture device and a playback device.
 
@@ -392,37 +386,28 @@ variable number of frames per call.
 
 ``MiniaudioError  (self, /, *args, **kwargs)``
 
-
 > When a miniaudio specific error occurs.
 
 
 *class*  ``PlaybackDevice``
 
-``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
-
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) ``
 
 > An audio device provided by miniaudio, for audio playback.
 
 
-*enum class*  ``SampleFormat``
- names:  ``UNKNOWN`` ``UNSIGNED8`` ``SIGNED16`` ``SIGNED24`` ``SIGNED32`` ``FLOAT32``
-
-> Sample format in memory
-
-
 *class*  ``SoundFileInfo``
 
-``SoundFileInfo  (self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int) -> None``
-
+``SoundFileInfo  (self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int) ``
 
 > Contains various properties of an audio file.
 
 
 *class*  ``WavFileReadStream``
 
-``WavFileReadStream  (self, pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) -> None``
-
+``WavFileReadStream  (self, pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) ``
 
 > An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
+
 
 
