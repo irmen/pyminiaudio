@@ -913,7 +913,6 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
     num_frames = int(len(sourcedata) / from_numchannels / sample_width)
     sample_width, _ = _width_from_format(to_fmt)
     output_frame_count = lib.ma_calculate_frame_count_after_src(to_samplerate, from_samplerate, num_frames)
-    # XXX segfault problem sometimes because buffer is too small? See https://github.com/dr-soft/miniaudio/issues/76
     buffer = bytearray(output_frame_count * sample_width * to_numchannels)
     frame_count = lib.ma_convert_frames(ffi.from_buffer(buffer), to_fmt.value, to_numchannels, to_samplerate,
                                         sourcedata, from_fmt.value, from_numchannels, from_samplerate, num_frames)

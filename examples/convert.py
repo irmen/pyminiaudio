@@ -10,9 +10,7 @@ def samples_path(filename):
 src = miniaudio.decode_file(samples_path("music.ogg"))
 print("Source: ", src)
 
-# XXX note: some output configurations cause a segfault. Still unclear why this is happening :(
-#     (1ch/ 19000hz/ Unsigned8   for example)
-result = miniaudio.DecodedSoundFile("result", 1, 44100, miniaudio.SampleFormat.UNSIGNED8, array.array('b'))
+result = miniaudio.DecodedSoundFile("result", 1, 22050, miniaudio.SampleFormat.UNSIGNED8, array.array('b'))
 converted_frames = miniaudio.convert_frames(src.sample_format, src.nchannels, src.sample_rate, src.samples.tobytes(),
                                             result.sample_format, result.nchannels, result.sample_rate)
 

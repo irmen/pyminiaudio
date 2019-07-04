@@ -24,7 +24,6 @@
 #define MA_NO_OPENSL
 #define MA_NO_WEBAUDIO
 #define MA_NO_JACK
-#define MA_PA_MINREQ_PATCH      /* tiny patch to fix a multi second pulseaudio startup delay */
 #include "miniaudio/miniaudio.h"
 
 
@@ -49,15 +48,16 @@ int setenv(const char *name, const char *value, int overwrite)
 
 void init_miniaudio(void) {
 
-    #ifndef MA_PA_MINREQ_PATCH
     /*
+    Currently, no specific init is needed. For older version of miniaudio, we had this:
+
     This is needed to avoid a huge multi second delay when using PulseAudio (without the minreq value patch)
     It seems to be related to the pa_buffer_attr->minreq value
     See https://freedesktop.org/software/pulseaudio/doxygen/structpa__buffer__attr.html#acdbe30979a50075479ee46c56cc724ee
     and https://github.com/pulseaudio/pulseaudio/blob/4e3a080d7699732be9c522be9a96d851f97fbf11/src/pulse/stream.c#L989
-    */
+
     setenv("PULSE_LATENCY_MSEC", "100", 0);
-    #endif
+    */
 }
 
 
