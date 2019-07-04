@@ -1,7 +1,7 @@
 .PHONY:  all win_dist dist upload
 
 all:
-	@echo "Targtets:  dist, win_dist, check_upload, upload"
+	@echo "Targets:  dist, win_dist, check_upload, upload"
 
 win_dist:
 	cmd /C del /q dist\*
@@ -20,4 +20,3 @@ upload: check_upload
 
 check_upload:
 	twine check dist/*
-	
