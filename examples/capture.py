@@ -37,8 +37,6 @@ if __name__ == "__main__":
     print("Wring to ./capture.wav")
     samples = array.array('h')
     samples.frombytes(buffer)
-    sound = miniaudio.DecodedSoundFile(
-        'capture', capture.nchannels, capture.sample_rate,
-        capture.sample_width, capture.format, samples)
+    sound = miniaudio.DecodedSoundFile('capture', capture.nchannels, capture.sample_rate, capture.format, samples)
     miniaudio.wav_write_file('capture.wav', sound)
     print("Recording done")
