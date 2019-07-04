@@ -576,6 +576,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
        ma_format format, ma_uint32 channels, ma_format capture_format, ma_uint32 capture_channels, ma_device_id* playback_device_id, ma_device_id* capture_device_id);
 
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
+    extern "Python" void internal_stop_callback(ma_device* pDevice);
 
 """)
 
