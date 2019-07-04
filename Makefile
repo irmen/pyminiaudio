@@ -7,7 +7,7 @@ test:
 	python setup.py test
 
 docs:
-	@python -c 'import setup; setup.make_docs()'
+	@python -c 'import setup; setup.make_md_docs("miniaudio")'
 
 win_dist:
 	cmd /C del /q dist\*

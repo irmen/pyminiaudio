@@ -35,25 +35,26 @@ if __name__ == "__main__":
     )
 
 
-def make_docs():
-    import miniaudio
+def make_md_docs(modulename="miniaudio"):
+    import importlib
     import inspect
+    module = importlib.import_module(modulename)
     documentable_classes = []
     documentable_functions = []
-    width = 100
-    for name, item in inspect.getmembers(miniaudio):
+    for name, item in inspect.getmembers(module):
         if inspect.isclass(item) or inspect.isfunction(item):
-            if item.__module__ == "miniaudio" and not item.__name__.startswith('_'):
+            # consider only non-private classes and functions from the module itself
+            if item.__module__ == modulename and not item.__name__.startswith('_'):
                 if inspect.isclass(item):
                     documentable_classes.append(item)
                 elif inspect.isfunction(item):
                     documentable_functions.append(item)
-    print("\n\n==================== 8<  GENERATED DOCS 8< =================\n\n")
+    print("\n\n===================  GENERATED API DOCS  =================\n\n")
+    width = 100
     for f in documentable_functions:
         doc = inspect.getdoc(f) or "No documentation available"
         sig = inspect.signature(f)
-        sig = "*function*  ``{name}  {sig}``".format(name=f.__name__, sig=sig)
-        print(sig)
+        print("*function*  ``{name}  {sig}``".format(name=f.__name__, sig=sig))
         print()
         for line in textwrap.wrap("> "+doc, width):
             print(line)
@@ -70,9 +71,9 @@ def make_docs():
             doc = inspect.getdoc(c) or "No documentation available"
             sig = inspect.signature(c.__init__)
             print("*class*  ``{}``\n".format(c.__name__))
-            sig = "``{name}  {sig}``\n".format(name=c.__name__, sig=sig)
-            print(sig)
+            print("``{name}  {sig}``\n".format(name=c.__name__, sig=sig))
             print()
             for line in textwrap.wrap("> "+doc, width):
                 print(line)
             print("\n")
+    print()
