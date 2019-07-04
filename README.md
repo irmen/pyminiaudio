@@ -116,5 +116,313 @@ ffmpeg.terminate()
 
 ## API
 
-@todo autogenerate?
+*function*  ``convert_frames  (from_fmt: miniaudio.SampleFormat, from_numchannels: int, from_samplerate: int, sourcedata: bytes, to_fmt: miniaudio.SampleFormat, to_numchannels: int, to_samplerate: int) -> bytearray``
+
+> Convert audio frames in source sample format with a certain number of channels, to another sample
+format and possibly down/upmixing the number of channels as well.
+
+
+*function*  ``convert_sample_format  (from_fmt: miniaudio.SampleFormat, sourcedata: bytes, to_fmt: miniaudio.SampleFormat, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>) -> bytearray``
+
+> Convert a raw buffer of pcm samples to another sample format. The result is returned as another
+raw pcm sample buffer
+
+
+*function*  ``decode  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100) -> miniaudio.DecodedSoundFile``
+
+> Convenience function to decode any supported audio file in memory to raw PCM samples in your
+chosen format.
+
+
+*function*  ``decode_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100) -> miniaudio.DecodedSoundFile``
+
+> Convenience function to decode any supported audio file to raw PCM samples in your chosen format.
+
+
+*function*  ``flac_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio file (flac format).
+
+
+*function*  ``flac_get_info  (data: bytes) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio data (flac format).
+
+
+*function*  ``flac_read_f32  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio file. Resulting sample format is 32 bits float.
+
+
+*function*  ``flac_read_file_f32  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio file. Resulting sample format is 32 bits float.
+
+
+*function*  ``flac_read_file_s16  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio file. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``flac_read_file_s32  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio file. Resulting sample format is 32 bits signed integer.
+
+
+*function*  ``flac_read_s16  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio data. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``flac_read_s32  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole flac audio data. Resulting sample format is 32 bits signed integer.
+
+
+*function*  ``flac_stream_file  (filename: str, frames_to_read: int = 1024) -> Generator[array.array, NoneType, NoneType]``
+
+> Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments.
+
+
+*function*  ``get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio file.
+
+
+*function*  ``mp3_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio file (mp3 format).
+
+
+*function*  ``mp3_get_info  (data: bytes) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio data (mp3 format).
+
+
+*function*  ``mp3_read_f32  (data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole mp3 audio data. Resulting sample format is 32 bits float.
+
+
+*function*  ``mp3_read_file_f32  (filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole mp3 audio file. Resulting sample format is 32 bits float.
+
+
+*function*  ``mp3_read_file_s16  (filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole mp3 audio file. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``mp3_read_s16  (data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole mp3 audio data. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``mp3_stream_file  (filename: str, frames_to_read: int = 1024, want_nchannels: int = 0, want_sample_rate: int = 0) -> Generator[array.array, NoneType, NoneType]``
+
+> Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments.
+
+
+*function*  ``read_file  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole audio file. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``stream_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, NoneType]``
+
+> Convenience generator function to decode and stream any supported audio file as chunks of raw PCM
+samples in the chosen format. If you send() a number into the generator rather than just using
+next() on it, you'll get that given number of frames, instead of the default configured amount. This
+is particularly useful to plug this stream into an audio device callback that wants a variable
+number of frames per call.
+
+
+*function*  ``stream_memory  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, NoneType]``
+
+> Convenience generator function to decode and stream any supported audio file in memory as chunks
+of raw PCM samples in the chosen format. If you send() a number into the generator rather than just
+using next() on it, you'll get that given number of frames, instead of the default configured
+amount. This is particularly useful to plug this stream into an audio device callback that wants a
+variable number of frames per call.
+
+
+*function*  ``vorbis_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio file (vorbis format).
+
+
+*function*  ``vorbis_get_info  (data: bytes) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio data (vorbis format).
+
+
+*function*  ``vorbis_read  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole vorbis audio data. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``vorbis_read_file  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole vorbis audio file. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``vorbis_stream_file  (filename: str) -> Generator[array.array, NoneType, NoneType]``
+
+> Streams the ogg vorbis audio file as interleaved 16 bit signed integer sample arrays segments.
+
+
+*function*  ``wav_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio file (wav format).
+
+
+*function*  ``wav_get_info  (data: bytes) -> miniaudio.SoundFileInfo``
+
+> Fetch some information about the audio data (wav format).
+
+
+*function*  ``wav_read_f32  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio data. Resulting sample format is 32 bits float.
+
+
+*function*  ``wav_read_file_f32  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio file. Resulting sample format is 32 bits float.
+
+
+*function*  ``wav_read_file_s16  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio file. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``wav_read_file_s32  (filename: str) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio file. Resulting sample format is 32 bits signed integer.
+
+
+*function*  ``wav_read_s16  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio data. Resulting sample format is 16 bits signed integer.
+
+
+*function*  ``wav_read_s32  (data: bytes) -> miniaudio.DecodedSoundFile``
+
+> Reads and decodes the whole wav audio data. Resulting sample format is 32 bits signed integer.
+
+
+*function*  ``wav_stream_file  (filename: str, frames_to_read: int = 1024) -> Generator[array.array, NoneType, NoneType]``
+
+> Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments.
+
+
+*function*  ``wav_write_file  (filename: str, sound: miniaudio.DecodedSoundFile) -> None``
+
+> Writes the pcm sound to a WAV file
+
+
+*class*  ``AbstractDevice``
+
+``AbstractDevice  (self)``
+
+
+> No documentation available
+
+
+*class*  ``CaptureDevice``
+
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
+
+
+> An audio device provided by miniaudio, for audio capture (recording).
+
+
+*enum class*  ``ChannelMixMode``
+ names:  ``RECTANGULAR`` ``SIMPLE`` ``CUSTOMWEIGHTS``
+
+> How to mix channels when converting
+
+
+*class*  ``DecodeError``
+
+``DecodeError  (self, /, *args, **kwargs)``
+
+
+> When something went wrong during decoding an audio file.
+
+
+*class*  ``DecodedSoundFile``
+
+``DecodedSoundFile  (self, name: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, samples: array.array) -> None``
+
+
+> Contains various properties and also the raw PCM samples of a fully decoded audio file.
+
+
+*enum class*  ``DeviceType``
+ names:  ``PLAYBACK`` ``CAPTURE`` ``DUPLEX``
+
+> Type of audio device
+
+
+*class*  ``Devices``
+
+``Devices  (self) -> None``
+
+
+> Query the audio playback and record devices that miniaudio provides
+
+
+*enum class*  ``DitherMode``
+ names:  ``NONE`` ``RECTANGLE`` ``TRIANGLE``
+
+> How to dither when converting
+
+
+*class*  ``DuplexStream``
+
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
+
+
+> Joins a capture device and a playback device.
+
+
+*class*  ``MiniaudioError``
+
+``MiniaudioError  (self, /, *args, **kwargs)``
+
+
+> When a miniaudio specific error occurs.
+
+
+*class*  ``PlaybackDevice``
+
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None) -> None``
+
+
+> An audio device provided by miniaudio, for audio playback.
+
+
+*enum class*  ``SampleFormat``
+ names:  ``UNKNOWN`` ``UNSIGNED8`` ``SIGNED16`` ``SIGNED24`` ``SIGNED32`` ``FLOAT32``
+
+> Sample format in memory
+
+
+*class*  ``SoundFileInfo``
+
+``SoundFileInfo  (self, name: str, file_format: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int) -> None``
+
+
+> Contains various properties of an audio file.
+
+
+*class*  ``WavFileReadStream``
+
+``WavFileReadStream  (self, pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) -> None``
+
+
+> An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
+
 

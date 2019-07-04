@@ -26,6 +26,7 @@ lib.init_miniaudio()
 
 
 class SampleFormat(Enum):
+    """Sample format in memory"""
     UNKNOWN = lib.ma_format_unknown
     UNSIGNED8 = lib.ma_format_u8
     SIGNED16 = lib.ma_format_s16
@@ -35,18 +36,21 @@ class SampleFormat(Enum):
 
 
 class DeviceType(Enum):
+    """Type of audio device"""
     PLAYBACK = lib.ma_device_type_playback
     CAPTURE = lib.ma_device_type_capture
     DUPLEX = lib.ma_device_type_duplex
 
 
 class DitherMode(Enum):
+    """How to dither when converting"""
     NONE = lib.ma_dither_mode_none
     RECTANGLE = lib.ma_dither_mode_rectangle
     TRIANGLE = lib.ma_dither_mode_triangle
 
 
 class ChannelMixMode(Enum):
+    """How to mix channels when converting"""
     RECTANGULAR = lib.ma_channel_mix_mode_rectangular
     SIMPLE = lib.ma_channel_mix_mode_simple
     CUSTOMWEIGHTS = lib.ma_channel_mix_mode_custom_weights

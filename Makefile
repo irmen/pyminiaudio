@@ -1,10 +1,13 @@
 .PHONY:  all win_dist dist upload
 
 all:
-	@echo "Targets:  test, dist, win_dist, check_upload, upload"
+	@echo "Targets:  test, docs, dist, win_dist, check_upload, upload"
 
 test:
 	python setup.py test
+
+docs:
+	@python -c 'import setup; setup.make_docs()'
 
 win_dist:
 	cmd /C del /q dist\*

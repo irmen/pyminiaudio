@@ -1,6 +1,8 @@
 import os
 import sys
+import enum
 import re
+import textwrap
 import unittest
 from setuptools import setup
 
@@ -31,3 +33,46 @@ if __name__ == "__main__":
         tests_require=[],
         test_suite="setup.miniaudio_test_suite"
     )
+
+
+def make_docs():
+    import miniaudio
+    import inspect
+    documentable_classes = []
+    documentable_functions = []
+    width = 100
+    for name, item in inspect.getmembers(miniaudio):
+        if inspect.isclass(item) or inspect.isfunction(item):
+            if item.__module__ == "miniaudio" and not item.__name__.startswith('_'):
+                if inspect.isclass(item):
+                    documentable_classes.append(item)
+                elif inspect.isfunction(item):
+                    documentable_functions.append(item)
+    print("\n\n==================== 8<  GENERATED DOCS 8< =================\n\n")
+    for f in documentable_functions:
+        doc = inspect.getdoc(f) or "No documentation available"
+        sig = inspect.signature(f)
+        sig = "*function*  ``{name}  {sig}``".format(name=f.__name__, sig=sig)
+        print(sig)
+        print()
+        for line in textwrap.wrap("> "+doc, width):
+            print(line)
+        print("\n")
+    for c in documentable_classes:
+        if issubclass(c, enum.Enum):
+            print("*enum class*  ``{name}``".format(name=c.__name__))
+            print(" names:  ``{}``\n".format("`` ``".join(e.name for e in list(c))))
+            doc = inspect.getdoc(c) or "No documentation available"
+            for line in textwrap.wrap("> "+doc, width):
+                print(line)
+            print("\n")
+        else:
+            doc = inspect.getdoc(c) or "No documentation available"
+            sig = inspect.signature(c.__init__)
+            print("*class*  ``{}``\n".format(c.__name__))
+            sig = "``{name}  {sig}``\n".format(name=c.__name__, sig=sig)
+            print(sig)
+            print()
+            for line in textwrap.wrap("> "+doc, width):
+                print(line)
+            print("\n")
