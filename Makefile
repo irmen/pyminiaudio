@@ -1,7 +1,10 @@
 .PHONY:  all win_dist dist upload
 
 all:
-	@echo "Targets:  dist, win_dist, check_upload, upload"
+	@echo "Targets:  test, dist, win_dist, check_upload, upload"
+
+test:
+	python setup.py test
 
 win_dist:
 	cmd /C del /q dist\*

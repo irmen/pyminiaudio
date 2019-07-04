@@ -9,14 +9,16 @@ This module provides:
 
 - the [miniaudio](https://github.com/dr-soft/miniaudio/) cross platform sound playback, recording and conversion library
 - its decoders for wav, flac, vorbis and mp3
-- python bindings via cffi for much of the functions offered in those libraries:
-  - getting audio file properties (such as duration, number of channels, sample rate) 
+- python bindings for most of the functions offered in those libraries:
   - reading and decoding audio files
-  - streaming audio files
-  - playback  (via efficient asynchronous pull-API)
-  - recording
-  - streaming, recording and playback are done with generator functions
+  - getting audio file properties (such as duration, number of channels, sample rate) 
+  - converting sample formats
+  - streaming large audio files
+  - audio playback
+  - audio recording
 
+Audio playback and recording are done with an efficient generator based pull-API.
+ 
 
 *Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).* 
 
