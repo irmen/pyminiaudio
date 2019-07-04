@@ -563,7 +563,6 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_uint64 ma_convert_frames(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_uint64 frameCount);
     ma_uint64 ma_convert_frames_ex(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_channel channelMapOut[MA_MAX_CHANNELS], const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_uint64 frameCount);
     ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
-
     
     /**** misc ****/
     const char* ma_get_backend_name(ma_backend backend);
@@ -574,15 +573,15 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     void ma_device_config_set_params(ma_device_config* config, ma_uint32 sample_rate, ma_uint32 buffer_size_msec, ma_uint32 buffer_size_frames,
        ma_format format, ma_uint32 channels, ma_format capture_format, ma_uint32 capture_channels, ma_device_id* playback_device_id, ma_device_id* capture_device_id);
 
+    void *malloc(size_t size);
+    void free(void *ptr);
+
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 
 """
 
 ffibuilder = FFI()
 ffibuilder.cdef(vorbis_defs + miniaudio_defs)
-
-# TODO: add the streaming DSP conversion API functions as well?
-# TODO: add the few remaining conversion functions (or ditch them)?
 
 
 libraries = []
@@ -610,6 +609,9 @@ ffibuilder.set_source("_miniaudio", """
 
     #include "miniaudio/miniaudio.h"
 
+    /* missing prototype? */
+    ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
+    
 
     /* low-level initialization */
     void init_miniaudio(void);
