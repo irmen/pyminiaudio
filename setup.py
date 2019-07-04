@@ -60,7 +60,7 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         sig = str(inspect.signature(func))
         if sig.endswith("-> None"):
             sig = sig[:-7]
-        print("*function*  ``{}  {}``\n".format(name, sig))
+        print("*function*  ``{}  {}``".format(name, sig))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
@@ -69,7 +69,7 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         if not doc:
             continue    # don't output if no docstring
         print("*enum class*  ``{}``".format(name))
-        print(" names:  ``{}``\n".format("`` ``".join(e.name for e in list(enumk))))
+        print(" names:  ``{}``".format("`` ``".join(e.name for e in list(enumk))))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
@@ -81,10 +81,10 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         if sig.endswith("-> None"):
             sig = sig[:-7]
         print("*class*  ``{}``\n".format(name))
-        print("``{}  {}``\n".format(name, sig))
+        print("``{}  {}``".format(name, sig))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
-        print("\n")
+        print()
         # methods
         for mname, method in inspect.getmembers(klass, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
             doc = inspect.cleandoc(method.__doc__ or "")
@@ -93,8 +93,9 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
             sig = str(inspect.signature(method))
             if sig.endswith("-> None"):
                 sig = sig[:-7]
-            print("> *method*  ``{}  {}``\n".format(mname, sig))
+            print("> *method*  ``{}  {}``".format(mname, sig))
             for line in textwrap.wrap("> > "+doc, width):
                 print(line)
-            print("\n")
+            print()
+        print()
     print()

@@ -98,9 +98,7 @@ int stb_vorbis_get_samples_short_interleaved(stb_vorbis *f, int channels, short 
 
 """
 
-
-ffibuilder = FFI()
-ffibuilder.cdef(vorbis_defs + """
+miniaudio_defs = """
 
 /********************** dr_flac ******************************/
 
@@ -566,6 +564,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_uint64 ma_convert_frames_ex(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_channel channelMapOut[MA_MAX_CHANNELS], const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_uint64 frameCount);
     ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
 
+    
     /**** misc ****/
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
@@ -577,7 +576,197 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
 
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 
-""")
+"""
+
+modplayer_defs = """
+// Basic type
+typedef unsigned char muchar;
+typedef unsigned short muint;
+typedef short mint;
+typedef unsigned long mulong;
+
+//
+// MOD file structures
+//
+
+#pragma pack(1)
+
+typedef struct {
+    muchar  name[22];
+    muint   length;
+    muchar  finetune;
+    muchar  volume;
+    muint   reppnt;
+    muint   replen;
+} sample;
+
+typedef struct {
+    muchar  sampperiod;
+    muchar  period;
+    muchar  sampeffect;
+    muchar  effect;
+} note;
+
+typedef struct {
+    muchar  title[20];
+    sample  samples[31];
+    muchar  length; // length of tablepos
+    muchar  protracker;
+    muchar  patterntable[128];
+    muchar  signature[4];
+    muchar  speed;
+} module;
+
+//
+// HxCMod Internal structures
+//
+typedef struct {
+    char*   sampdata;
+    muint   sampnum;
+    muint   length;
+    muint   reppnt;
+    muint   replen;
+    mulong  samppos;
+    muint   period;
+    muchar  volume;
+    mulong  ticks;
+    muchar  effect;
+    muchar  parameffect;
+    muint   effect_code;
+    mint    decalperiod;
+    mint    portaspeed;
+    mint    portaperiod;
+    mint    vibraperiod;
+    mint    Arpperiods[3];
+    muchar  ArpIndex;
+    mint    oldk;
+    muchar  volumeslide;
+    muchar  vibraparam;
+    muchar  vibrapointeur;
+    muchar  finetune;
+    muchar  cut_param;
+    muint   patternloopcnt;
+    muint   patternloopstartpoint;
+} channel;
+
+typedef struct {
+    module  song;
+    char*   sampledata[31];
+    note*   patterndata[128];
+
+    mulong  playrate;
+    muint   tablepos;
+    muint   patternpos;
+    muint   patterndelay;
+    muint   jump_loop_effect;
+    muchar  bpm;
+    mulong  patternticks;
+    mulong  patterntickse;
+    mulong  patternticksaim;
+    mulong  sampleticksconst;
+    mulong  samplenb;
+    channel channels[32];  // MAXCHANNELS
+    muint   number_of_channels;
+    muint   fullperiod[1152];   // MAXNOTES * 8
+    muint   mod_loaded;
+    mint    last_r_sample;
+    mint    last_l_sample;
+    mint    stereo;
+    mint    stereo_separation;
+    mint    bits;
+    mint    filter;
+
+    muchar *modfile; // the raw mod file
+    mulong  modfilesize;
+    muint   loopcount;
+} jar_mod_context_t;
+
+//
+// Player states structures
+//
+typedef struct track_state_
+{
+    unsigned char instrument_number;
+    unsigned short cur_period;
+    unsigned char  cur_volume;
+    unsigned short cur_effect;
+    unsigned short cur_parameffect;
+}track_state;
+
+typedef struct tracker_state_
+{
+    int number_of_tracks;
+    int bpm;
+    int speed;
+    int cur_pattern;
+    int cur_pattern_pos;
+    int cur_pattern_table_pos;
+    unsigned int buf_index;
+    track_state tracks[32];
+}tracker_state;
+
+typedef struct tracker_state_instrument_
+{
+    char name[22];
+    int  active;
+}tracker_state_instrument;
+
+typedef struct jar_mod_tracker_buffer_state_
+{
+    int  nb_max_of_state;
+    int  nb_of_state;
+    int  cur_rd_index;
+    int  sample_step;
+    char name[64];
+    tracker_state_instrument instruments[31];
+    tracker_state * track_state_buf;
+}jar_mod_tracker_buffer_state;
+
+bool   jar_mod_init(jar_mod_context_t * modctx);
+bool   jar_mod_setcfg(jar_mod_context_t * modctx, int samplerate, int bits, int stereo, int stereo_separation, int filter);
+void   jar_mod_fillbuffer(jar_mod_context_t * modctx, short * outbuffer, unsigned long nbsample, jar_mod_tracker_buffer_state * trkbuf);
+void   jar_mod_unload(jar_mod_context_t * modctx);
+mulong jar_mod_load_file(jar_mod_context_t * modctx, const char* filename);
+mulong jar_mod_current_samples(jar_mod_context_t * modctx);
+// mulong jar_mod_max_samples(jar_mod_context_t * modctx);
+void   jar_mod_seek_start(jar_mod_context_t * ctx);
+"""
+
+xmplayer_defs = """
+
+struct jar_xm_context_s;
+typedef struct jar_xm_context_s jar_xm_context_t;
+
+
+// int jar_xm_create_context_from_file(jar_xm_context_t** ctx, uint32_t rate, const char* filename);
+// int jar_xm_create_context(jar_xm_context_t**, const char* moddata, uint32_t rate);
+int jar_xm_create_context_safe(jar_xm_context_t**, const char* moddata, size_t moddata_length, uint32_t rate);
+void jar_xm_free_context(jar_xm_context_t*);
+void jar_xm_generate_samples(jar_xm_context_t*, float* output, size_t numsamples);
+void jar_xm_generate_samples_16bit(jar_xm_context_t* ctx, short* output, size_t numsamples);
+void jar_xm_generate_samples_8bit(jar_xm_context_t* ctx, char* output, size_t numsamples);
+void jar_xm_set_max_loop_count(jar_xm_context_t*, uint8_t loopcnt);
+uint8_t jar_xm_get_loop_count(jar_xm_context_t*);
+bool jar_xm_mute_channel(jar_xm_context_t*, uint16_t, bool);
+bool jar_xm_mute_instrument(jar_xm_context_t*, uint16_t, bool);
+const char* jar_xm_get_module_name(jar_xm_context_t*);
+const char* jar_xm_get_tracker_name(jar_xm_context_t*);
+uint16_t jar_xm_get_number_of_channels(jar_xm_context_t*);
+uint16_t jar_xm_get_module_length(jar_xm_context_t*);
+uint16_t jar_xm_get_number_of_patterns(jar_xm_context_t*);
+uint16_t jar_xm_get_number_of_rows(jar_xm_context_t*, uint16_t);
+uint16_t jar_xm_get_number_of_instruments(jar_xm_context_t*);
+uint16_t jar_xm_get_number_of_samples(jar_xm_context_t*, uint16_t);
+void jar_xm_get_playing_speed(jar_xm_context_t*, uint16_t* bpm, uint16_t* tempo);
+void jar_xm_get_position(jar_xm_context_t*, uint8_t* pattern_index, uint8_t* pattern, uint8_t* row, uint64_t* samples);
+uint64_t jar_xm_get_latest_trigger_of_instrument(jar_xm_context_t*, uint16_t);
+uint64_t jar_xm_get_latest_trigger_of_sample(jar_xm_context_t*, uint16_t instr, uint16_t sample);
+uint64_t jar_xm_get_latest_trigger_of_channel(jar_xm_context_t*, uint16_t);
+uint64_t jar_xm_get_remaining_samples(jar_xm_context_t*);
+"""
+
+ffibuilder = FFI()
+ffibuilder.cdef(vorbis_defs + miniaudio_defs + modplayer_defs + xmplayer_defs)
 
 # TODO: add the streaming DSP conversion API functions as well?
 # TODO: add the few remaining conversion functions (or ditch them)?
@@ -606,10 +795,8 @@ ffibuilder.set_source("_miniaudio", """
     #include "miniaudio/stb_vorbis.c"
     #endif
 
-/**** TODO for future version:
     #include "miniaudio/jar_xm.h"
     #include "miniaudio/jar_mod.h"
-*****/
     #include "miniaudio/miniaudio.h"
 
 
