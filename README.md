@@ -31,9 +31,10 @@ are installed (Visual Studio or the VC++ build tools).
  
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
-## Synthesizer
+## Synthesizer, modplayer?
 
-If you like this library you may also be interested in my software FM synthesizer: https://pypi.org/project/synthplayer/
+If you like this library you may also be interested in my [software FM synthesizer](https://pypi.org/project/synthplayer/)
+or my [mod player](https://pypi.org/project/libxmplite/) which uses libxmp. 
 
 
 ## Examples
