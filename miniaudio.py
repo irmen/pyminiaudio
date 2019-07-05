@@ -1086,7 +1086,7 @@ class CaptureDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio capture (recording)."""
     def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
-                 backends: Optional[List[Backend]] = None) -> None:
+                 callback_periods: int = 0, backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.format = input_format
         self.sample_width = _width_from_format(input_format)
@@ -1100,6 +1100,7 @@ class CaptureDevice(AbstractDevice):
                                         0, 0, 0, self.format.value, self.nchannels, ffi.NULL, device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
+        self._devconfig.periods = callback_periods
         self.callback_generator = None  # type: Optional[CaptureCallbackGeneratorType]
         self._context = self._make_context(backends or [])
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
@@ -1134,7 +1135,8 @@ class PlaybackDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio playback."""
     def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
-                 passthrough: bool = False, backends: Optional[List[Backend]] = None) -> None:
+                 callback_periods: int = 0, passthrough: bool = False,
+                 backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.format = output_format
         self.sample_width = _width_from_format(output_format)
@@ -1154,6 +1156,7 @@ class PlaybackDevice(AbstractDevice):
                                             self.format.value, self.nchannels, 0, 0, device_id or ffi.NULL, ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
+        self._devconfig.periods = callback_periods
         self.callback_generator = None   # type: Optional[PlaybackCallbackGeneratorType]
 
         self._context = self._make_context(backends or [])
@@ -1195,7 +1198,7 @@ class DuplexStream(AbstractDevice):
                  playback_channels: int = 2, capture_format: SampleFormat = SampleFormat.SIGNED16,
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None,
-                 backends: Optional[List[Backend]] = None) -> None:
+                 callback_periods: int = 0, backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
@@ -1214,6 +1217,7 @@ class DuplexStream(AbstractDevice):
             playback_device_id or ffi.NULL, capture_device_id or ffi.NULL)
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
+        self._devconfig.periods = callback_periods
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
 
         self._context = self._make_context(backends or [])

@@ -455,13 +455,13 @@ typedef struct
 } ma_device_info;
 
 
-
 typedef struct
 {
     ma_device_type deviceType;
     ma_uint32 sampleRate;
     ma_uint32 bufferSizeInFrames;
     ma_uint32 bufferSizeInMilliseconds;
+    ma_uint32 periods;
     ma_device_callback_proc dataCallback;
     ma_stop_proc stopCallback;
     void* pUserData;
