@@ -2,8 +2,11 @@ import miniaudio
 from time import sleep
 
 
+backends = []
+
+
 def choose_devices():
-    devices = miniaudio.Devices()
+    devices = miniaudio.Devices(backends=backends)
     print("Available capture devices:")
     captures = devices.get_captures()
     for d in enumerate(captures):
@@ -25,7 +28,7 @@ if __name__ == "__main__":
             data = yield data
 
     capture_dev, playback_dev = choose_devices()
-    duplex = miniaudio.DuplexStream(buffersize_msec=0, sample_rate=48000,
+    duplex = miniaudio.DuplexStream(sample_rate=48000, backends=backends,
                                     playback_device_id=playback_dev["id"], capture_device_id=capture_dev["id"])
     generator = pass_through()
     next(generator)

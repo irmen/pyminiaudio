@@ -19,8 +19,7 @@ __pycache__/
 .mypy_cache/
 .eggs/
 .pytest_cache/
-.idea/workspace.xml
-.idea/dictionaries/*.xml
+.idea/
 build
 dist
 *.egg-info/

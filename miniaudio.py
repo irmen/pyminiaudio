@@ -58,6 +58,24 @@ class ChannelMixMode(Enum):
     DEFAULT = lib.ma_channel_mix_mode_default
 
 
+class Backend(Enum):
+    """Operating system audio backend to use (only a subset will be available)"""
+    WASAPI = lib.ma_backend_wasapi
+    DSOUND = lib.ma_backend_dsound
+    WINMM = lib.ma_backend_winmm
+    COREAUDIO = lib.ma_backend_coreaudio
+    SNDIO = lib.ma_backend_sndio
+    AUDIO4 = lib.ma_backend_audio4
+    OSS = lib.ma_backend_oss
+    PULSEAUDIO = lib.ma_backend_pulseaudio
+    ALSA = lib.ma_backend_alsa
+    JACK = lib.ma_backend_jack
+    AAUDIO = lib.ma_backend_aaudio
+    OPENSL = lib.ma_backend_opensl
+    WEBAUDIO = lib.ma_backend_webaudio
+    NULL = lib.ma_backend_null
+
+
 class SoundFileInfo:
     """Contains various properties of an audio file."""
     def __init__(self, name: str, file_format: str, nchannels: int, sample_rate: int,
@@ -756,11 +774,19 @@ def _get_filename_bytes(filename: str) -> bytes:
 
 class Devices:
     """Query the audio playback and record devices that miniaudio provides"""
-    def __init__(self) -> None:
-        self._context = ffi.new("ma_context*")
-        result = lib.ma_context_init(ffi.NULL, 0, ffi.NULL, self._context)
+    def __init__(self, backends: Optional[List[Backend]] = None) -> None:
+        self._context = ffi.NULL
+        context = ffi.new("ma_context*")
+        if backends:
+            backends_mem = ffi.new("ma_backend[]", len(backends))
+            for i, b in enumerate(backends):
+                backends_mem[i] = b.value
+            result = lib.ma_context_init(backends_mem, len(backends), ffi.NULL, context)
+        else:
+            result = lib.ma_context_init(ffi.NULL, 0, ffi.NULL, context)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("cannot init context", result)
+        self._context = context
         self.backend = ffi.string(lib.ma_get_backend_name(self._context[0].backend)).decode()
 
     def get_playbacks(self) -> List[Dict[str, Any]]:
@@ -1041,12 +1067,26 @@ class AbstractDevice:
         if id(self) in _callback_data:
             del _callback_data[id(self)]
 
+    def _make_context(self, backends: List[Backend]) -> ffi.CData:
+        if backends:
+            # use a context to supply a preferred backend list
+            context = ffi.new("ma_context*")
+            backends_mem = ffi.new("ma_backend[]", len(backends))
+            for i, b in enumerate(backends):
+                backends_mem[i] = b.value
+            result = lib.ma_context_init(backends_mem, len(backends), ffi.NULL, context)
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("cannot init context", result)
+            return context
+        else:
+            return ffi.NULL
+
 
 class CaptureDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio capture (recording)."""
     def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
-                 sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None
-                 ) -> None:
+                 sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
+                 backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.format = input_format
         self.sample_width = _width_from_format(input_format)
@@ -1061,7 +1101,8 @@ class CaptureDevice(AbstractDevice):
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None  # type: Optional[CaptureCallbackGeneratorType]
-        result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
+        self._context = self._make_context(backends or [])
+        result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
         if self._device.pContext.backend == lib.ma_backend_null:
@@ -1093,7 +1134,7 @@ class PlaybackDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio playback."""
     def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
-                 passthrough: bool = False) -> None:
+                 passthrough: bool = False, backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.format = output_format
         self.sample_width = _width_from_format(output_format)
@@ -1114,7 +1155,9 @@ class PlaybackDevice(AbstractDevice):
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None   # type: Optional[PlaybackCallbackGeneratorType]
-        result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
+
+        self._context = self._make_context(backends or [])
+        result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
         if self._device.pContext.backend == lib.ma_backend_null:
@@ -1151,8 +1194,8 @@ class DuplexStream(AbstractDevice):
     def __init__(self, playback_format: SampleFormat = SampleFormat.SIGNED16,
                  playback_channels: int = 2, capture_format: SampleFormat = SampleFormat.SIGNED16,
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
-                 playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None
-                 ) -> None:
+                 playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None,
+                 backends: Optional[List[Backend]] = None) -> None:
         super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
@@ -1173,7 +1216,8 @@ class DuplexStream(AbstractDevice):
         self._devconfig.dataCallback = lib._internal_data_callback
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
 
-        result = lib.ma_device_init(ffi.NULL, ffi.addressof(self._devconfig), self._device)
+        self._context = self._make_context(backends or [])
+        result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
         if self._device.pContext.backend == lib.ma_backend_null:

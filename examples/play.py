@@ -1,8 +1,9 @@
 """
 This example loads an audio file (in a format supported by miniaudio),
-prints some information about it, and plays it without any sample rate/format conversion if possible.
-
+prints some information about it, and plays it without any sample rate/format conversion
+in the application, if possible.  (conversion may still occur in the backend audio api)
 """
+
 import sys
 import miniaudio
 
