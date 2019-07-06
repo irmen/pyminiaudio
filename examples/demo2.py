@@ -18,7 +18,7 @@ def memory_stream(soundfile: miniaudio.DecodedSoundFile) -> miniaudio.PlaybackCa
         required_frames = yield output
 
 
-device = miniaudio.PlaybackDevice()
+device = miniaudio.PlaybackDevice(app_name="Playback Example #2")
 decoded = miniaudio.decode_file(samples_path("music.mp3"))
 print("The decoded file has {} frames at {} hz and takes {:.1f} seconds"
       .format(decoded.num_frames, decoded.sample_rate, decoded.duration))

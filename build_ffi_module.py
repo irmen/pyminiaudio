@@ -488,6 +488,24 @@ typedef struct
 typedef struct
 {
     ma_thread_priority threadPriority;
+    void* pUserData;
+
+    struct
+    {
+        ma_bool32 useVerboseDeviceEnumeration;
+    } alsa;
+    struct
+    {
+        const char* pApplicationName;
+        const char* pServerName;
+        ma_bool32 tryAutoSpawn; /* Enables autospawning of the PulseAudio daemon if necessary. */
+    } pulse;
+    struct
+    {
+        const char* pClientName;
+        ma_bool32 tryStartServer;
+    } jack;
+
     ...;
 } ma_context_config;
 

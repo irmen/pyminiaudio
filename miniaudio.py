@@ -15,7 +15,7 @@ import array
 import struct
 import inspect
 from enum import Enum
-from typing import Generator, List, Tuple, Dict, Optional, Union, Any
+from typing import Generator, List, Dict, Optional, Union, Any
 from _miniaudio import ffi, lib
 try:
     import numpy
@@ -74,6 +74,18 @@ class Backend(Enum):
     OPENSL = lib.ma_backend_opensl
     WEBAUDIO = lib.ma_backend_webaudio
     NULL = lib.ma_backend_null
+
+
+class ThreadPriority(Enum):
+    """The priority of the worker thread (default=HIGHEST)"""
+    IDLE = lib.ma_thread_priority_idle
+    LOWEST = lib.ma_thread_priority_lowest
+    LOW = lib.ma_thread_priority_low
+    NORMAL = lib.ma_thread_priority_normal
+    HIGH = lib.ma_thread_priority_high
+    HIGHEST = lib.ma_thread_priority_highest
+    REALTIME = lib.ma_thread_priority_realtime
+    DEFAULT = lib.ma_thread_priority_default
 
 
 class SoundFileInfo:
@@ -1067,26 +1079,36 @@ class AbstractDevice:
         if id(self) in _callback_data:
             del _callback_data[id(self)]
 
-    def _make_context(self, backends: List[Backend]) -> ffi.CData:
+    def _make_context(self, backends: List[Backend], thread_prio: ThreadPriority = ThreadPriority.HIGHEST,
+                      app_name: str = "") -> ffi.CData:
+        context_config = lib.ma_context_config_init()
+        context_config.threadPriority = thread_prio.value
+        context = ffi.new("ma_context*")
+        if app_name:
+            self._context_app_name = app_name.encode()
+            context_config.pulse.pApplicationName = ffi.from_buffer(self._context_app_name)
+            context_config.jack.pClientName = ffi.from_buffer(self._context_app_name)
         if backends:
             # use a context to supply a preferred backend list
-            context = ffi.new("ma_context*")
             backends_mem = ffi.new("ma_backend[]", len(backends))
             for i, b in enumerate(backends):
                 backends_mem[i] = b.value
-            result = lib.ma_context_init(backends_mem, len(backends), ffi.NULL, context)
+            result = lib.ma_context_init(backends_mem, len(backends), ffi.addressof(context_config), context)
             if result != lib.MA_SUCCESS:
                 raise MiniaudioError("cannot init context", result)
-            return context
         else:
-            return ffi.NULL
+            result = lib.ma_context_init(ffi.NULL, 0, ffi.addressof(context_config), context)
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("cannot init context", result)
+        return context
 
 
 class CaptureDevice(AbstractDevice):
     """An audio device provided by miniaudio, for audio capture (recording)."""
     def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
-                 callback_periods: int = 0, backends: Optional[List[Backend]] = None) -> None:
+                 callback_periods: int = 0, backends: Optional[List[Backend]] = None,
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
         super().__init__()
         self.format = input_format
         self.sample_width = _width_from_format(input_format)
@@ -1102,7 +1124,7 @@ class CaptureDevice(AbstractDevice):
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.periods = callback_periods
         self.callback_generator = None  # type: Optional[CaptureCallbackGeneratorType]
-        self._context = self._make_context(backends or [])
+        self._context = self._make_context(backends or [], thread_prio, app_name)
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
@@ -1136,7 +1158,8 @@ class PlaybackDevice(AbstractDevice):
     def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, passthrough: bool = False,
-                 backends: Optional[List[Backend]] = None) -> None:
+                 backends: Optional[List[Backend]] = None,
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
         super().__init__()
         self.format = output_format
         self.sample_width = _width_from_format(output_format)
@@ -1159,7 +1182,7 @@ class PlaybackDevice(AbstractDevice):
         self._devconfig.periods = callback_periods
         self.callback_generator = None   # type: Optional[PlaybackCallbackGeneratorType]
 
-        self._context = self._make_context(backends or [])
+        self._context = self._make_context(backends or [], thread_prio, app_name)
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
@@ -1198,7 +1221,8 @@ class DuplexStream(AbstractDevice):
                  playback_channels: int = 2, capture_format: SampleFormat = SampleFormat.SIGNED16,
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None,
-                 callback_periods: int = 0, backends: Optional[List[Backend]] = None) -> None:
+                 callback_periods: int = 0, backends: Optional[List[Backend]] = None,
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
         super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
@@ -1220,7 +1244,7 @@ class DuplexStream(AbstractDevice):
         self._devconfig.periods = callback_periods
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
 
-        self._context = self._make_context(backends or [])
+        self._context = self._make_context(backends or [], thread_prio, app_name)
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
