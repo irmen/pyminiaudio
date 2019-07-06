@@ -128,12 +128,12 @@ format and possibly down/upmixing the number of channels as well.
 raw pcm sample buffer
 
 
-*function*  ``decode  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100) -> miniaudio.DecodedSoundFile``
+*function*  ``decode  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>) -> miniaudio.DecodedSoundFile``
 > Convenience function to decode any supported audio file in memory to raw PCM samples in your
 chosen format.
 
 
-*function*  ``decode_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100) -> miniaudio.DecodedSoundFile``
+*function*  ``decode_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>) -> miniaudio.DecodedSoundFile``
 > Convenience function to decode any supported audio file to raw PCM samples in your chosen format.
 
 
@@ -211,7 +211,7 @@ the same format as in the file. Unless you set convert_convert_to_16bit to True,
 always a 16 bit sample format.
 
 
-*function*  ``stream_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, NoneType]``
+*function*  ``stream_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>) -> Generator[array.array, int, NoneType]``
 > Convenience generator function to decode and stream any supported audio file as chunks of raw PCM
 samples in the chosen format. If you send() a number into the generator rather than just using
 next() on it, you'll get that given number of frames, instead of the default configured amount. This
@@ -219,7 +219,7 @@ is particularly useful to plug this stream into an audio device callback that wa
 number of frames per call.
 
 
-*function*  ``stream_memory  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024) -> Generator[array.array, int, NoneType]``
+*function*  ``stream_memory  (data: bytes, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>) -> Generator[array.array, int, NoneType]``
 > Convenience generator function to decode and stream any supported audio file in memory as chunks
 of raw PCM samples in the chosen format. If you send() a number into the generator rather than just
 using next() on it, you'll get that given number of frames, instead of the default configured
@@ -312,9 +312,14 @@ variable number of frames per call.
 > Sample format in memory
 
 
+*enum class*  ``ThreadPriority``
+ names:  ``IDLE`` ``LOWEST`` ``LOW`` ``NORMAL`` ``HIGH`` ``HIGHEST`` ``REALTIME``
+> The priority of the worker thread (default=HIGHEST)
+
+
 *class*  ``CaptureDevice``
 
-``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, backends: Union[List[miniaudio.Backend], NoneType] = None) ``
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio capture (recording).
 
 > *method*  ``close  (self) ``
@@ -354,7 +359,7 @@ callback generator as raw bytes. (it should already be started before)
 
 *class*  ``DuplexStream``
 
-``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None, backends: Union[List[miniaudio.Backend], NoneType] = None) ``
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > Joins a capture device and a playback device.
 
 > *method*  ``close  (self) ``
@@ -377,7 +382,7 @@ already be started before passing it in)
 
 *class*  ``PlaybackDevice``
 
-``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, passthrough: bool = False, backends: Union[List[miniaudio.Backend], NoneType] = None) ``
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio playback.
 
 > *method*  ``close  (self) ``

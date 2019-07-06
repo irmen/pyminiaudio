@@ -25,10 +25,19 @@ def stream_file(info, filename):
         except StopIteration:
             return
 
-    stream = progress_stream_wrapper(miniaudio.stream_file(
-        filename, output_format=info.sample_format, sample_rate=info.sample_rate))
+    output_format = info.sample_format
+    try:
+        filestream = miniaudio.stream_file(filename, output_format=output_format, sample_rate=info.sample_rate)
+    except miniaudio.MiniaudioError as x:
+        print("Cannot create optimal stream:", x)
+        print("Creating stream with different sample format!")
+        output_format = miniaudio.SampleFormat.SIGNED16
+        filestream = miniaudio.stream_file(filename, output_format=output_format, sample_rate=info.sample_rate,
+                                           dither=miniaudio.DitherMode.TRIANGLE)
+
+    stream = progress_stream_wrapper(filestream)
     next(stream)   # start the generator
-    device = miniaudio.PlaybackDevice(output_format=info.sample_format, sample_rate=info.sample_rate)
+    device = miniaudio.PlaybackDevice(output_format=output_format, sample_rate=info.sample_rate)
     print("playback device backend:", device.backend, device.format.name, device.sample_rate, "hz")
     device.start(stream)
     input("Audio file playing in the background. Enter to stop playback: ")
