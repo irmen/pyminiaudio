@@ -17,7 +17,7 @@ win_dist:
 	py -3-64 setup.py bdist_wheel
 
 dist:
-	rm dist/*
+	rm -f dist/*
 	python setup.py clean --all
 	python setup.py sdist
 
