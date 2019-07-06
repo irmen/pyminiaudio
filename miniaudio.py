@@ -1118,8 +1118,11 @@ class CaptureDevice(AbstractDevice):
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_capture)
-        lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec,
-                                        0, 0, 0, self.format.value, self.nchannels, ffi.NULL, device_id or ffi.NULL)
+        self._devconfig.sampleRate = self.sample_rate
+        self._devconfig.capture.channels = self.nchannels
+        self._devconfig.capture.format = self.format.value
+        self._devconfig.capture.pDeviceID = device_id or ffi.NULL
+        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.periods = callback_periods
@@ -1169,14 +1172,12 @@ class PlaybackDevice(AbstractDevice):
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_playback)
-        if passthrough:
-            # use the special 'fast path' passthrough to the backend, without any conversions
-            lib.ma_device_config_set_params(ffi.addressof(self._devconfig), 0, self.buffersize_msec, 0,
-                                            0, 0, 0, 0, device_id or ffi.NULL, ffi.NULL)
-        else:
-            lib.ma_device_config_set_params(ffi.addressof(self._devconfig), self.sample_rate,
-                                            self.buffersize_msec, 0,
-                                            self.format.value, self.nchannels, 0, 0, device_id or ffi.NULL, ffi.NULL)
+        if not passthrough:
+            self._devconfig.sampleRate = self.sample_rate
+            self._devconfig.playback.channels = self.nchannels
+            self._devconfig.playback.format = self.format.value
+        self._devconfig.playback.pDeviceID = device_id or ffi.NULL
+        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.periods = callback_periods
@@ -1234,16 +1235,18 @@ class DuplexStream(AbstractDevice):
         _callback_data[id(self)] = self
         self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_duplex)
-
-        lib.ma_device_config_set_params(
-            ffi.addressof(self._devconfig), self.sample_rate, self.buffersize_msec, 0,
-            playback_format.value, playback_channels, capture_format.value, capture_channels,
-            playback_device_id or ffi.NULL, capture_device_id or ffi.NULL)
+        self._devconfig.sampleRate = self.sample_rate
+        self._devconfig.playback.channels = self.playback_channels
+        self._devconfig.playback.format = self.playback_format.value
+        self._devconfig.playback.pDeviceID = playback_device_id or ffi.NULL
+        self._devconfig.capture.channels = self.capture_channels
+        self._devconfig.capture.format = self.capture_format.value
+        self._devconfig.capture.pDeviceID = capture_device_id or ffi.NULL
+        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self.userdata_ptr
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.periods = callback_periods
         self.callback_generator = None  # type: Optional[DuplexCallbackGeneratorType]
-
         self._context = self._make_context(backends or [], thread_prio, app_name)
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:

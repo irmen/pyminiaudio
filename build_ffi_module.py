@@ -588,9 +588,6 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     void ma_zero_pcm_frames(void* p, ma_uint32 frameCount, ma_format format, ma_uint32 channels);
 
     void init_miniaudio(void);
-    void ma_device_config_set_params(ma_device_config* config, ma_uint32 sample_rate, ma_uint32 buffer_size_msec, ma_uint32 buffer_size_frames,
-       ma_format format, ma_uint32 channels, ma_format capture_format, ma_uint32 capture_channels, ma_device_id* playback_device_id, ma_device_id* capture_device_id);
-
     void *malloc(size_t size);
     void free(void *ptr);
 
@@ -633,10 +630,6 @@ ffibuilder.set_source("_miniaudio", """
 
     /* low-level initialization */
     void init_miniaudio(void);
-
-    /* helper function to set some parameters in the ma_device_config struct which couldn't be parsed by cffi directly */
-    void ma_device_config_set_params(ma_device_config* config, ma_uint32 sample_rate, ma_uint32 buffer_size_msec, ma_uint32 buffer_size_frames,
-       ma_format format, ma_uint32 channels, ma_format capture_format, ma_uint32 capture_channels, ma_device_id* playback_device_id, ma_device_id* capture_device_id);
 
 """,
                       sources=["miniaudio.c"],
