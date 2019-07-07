@@ -53,6 +53,15 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
             elif inspect.isfunction(item):
                 documentable_functions.append((item.__name__, item))
     print("\n\n===================  GENERATED API DOCS  =================\n\n")
+    for name, enumk in sorted(documentable_enums):
+        doc = inspect.cleandoc(enumk.__doc__ or "")
+        if not doc:
+            continue    # don't output if no docstring
+        print("*enum class*  ``{}``".format(name))
+        print(" names:  ``{}``".format("`` ``".join(e.name for e in list(enumk))))
+        for line in textwrap.wrap("> "+doc, width):
+            print(line)
+        print("\n")
     for name, func in sorted(documentable_functions):
         doc = inspect.cleandoc(func.__doc__ or "")
         if not doc:
@@ -61,15 +70,6 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         if sig.endswith("-> None"):
             sig = sig[:-7]
         print("*function*  ``{}  {}``".format(name, sig))
-        for line in textwrap.wrap("> "+doc, width):
-            print(line)
-        print("\n")
-    for name, enumk in sorted(documentable_enums):
-        doc = inspect.cleandoc(enumk.__doc__ or "")
-        if not doc:
-            continue    # don't output if no docstring
-        print("*enum class*  ``{}``".format(name))
-        print(" names:  ``{}``".format("`` ``".join(e.name for e in list(enumk))))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
