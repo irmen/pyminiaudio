@@ -770,7 +770,7 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
 
 
 def _create_int_array(itemsize: int) -> array.array:
-    for typecode in "bhilq":
+    for typecode in "Bhilq":
         a = array.array(typecode)
         if a.itemsize == itemsize:
             return a
