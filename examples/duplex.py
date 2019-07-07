@@ -1,3 +1,8 @@
+"""
+Duplex audio:
+record from a source, play back on another output.
+"""
+
 import miniaudio
 from time import sleep
 

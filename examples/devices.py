@@ -1,3 +1,7 @@
+"""
+List the available audio devices.
+"""
+
 import miniaudio
 
 devices = miniaudio.Devices(backends=[])

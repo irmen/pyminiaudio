@@ -1,3 +1,7 @@
+"""
+Simplest example of decoding and playing an audio file
+"""
+
 import os
 import miniaudio
 

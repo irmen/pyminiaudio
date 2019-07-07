@@ -1,3 +1,7 @@
+"""
+Listing and Choosing the audio device to play on.
+"""
+
 import os
 import miniaudio
 

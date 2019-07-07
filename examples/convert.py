@@ -1,3 +1,7 @@
+"""
+Convert an audio file to WAV and different sample formats.
+"""
+
 import os
 import array
 import miniaudio

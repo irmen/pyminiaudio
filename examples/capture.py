@@ -1,3 +1,7 @@
+"""
+Recording audio from a selected input device.
+"""
+
 import array
 from time import sleep
 import miniaudio

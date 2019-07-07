@@ -1,3 +1,7 @@
+"""
+Convert samples in another format, in streaming fashion rather than all at once.
+"""
+
 import os
 import array
 import io

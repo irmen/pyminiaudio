@@ -2,6 +2,7 @@
 This example uses ffmpeg as an external tool to decode an audio file in a format
 that miniaudio itself can't decode (m4a/aac in this case)
 """
+
 import os
 import subprocess
 import miniaudio

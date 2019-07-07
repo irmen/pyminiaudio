@@ -1,29 +1,39 @@
+"""
+Example of decoding a stream of input data.
+(in this case, just reading from an audio file)
+"""
+
 import os
 import miniaudio
+from miniaudio import SeekOrigin
 
 
-def samples_path(filename):
-    return os.path.join(os.path.abspath(os.path.dirname(__file__)), 'samples', filename)
+class FileSource(miniaudio.StreamableSource):
+    def __init__(self, filename: str) -> None:
+        filename = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'samples', filename)
+        self.file = open(filename, "rb")
+
+    def read(self, num_bytes: int) -> bytes:
+        print("reading from stream:", num_bytes)
+        return self.file.read(num_bytes)
+
+    def seek(self, offset: int, origin: SeekOrigin) -> bool:
+        # note: seek support is usually not needed if you provide the file format to the decoder upfront
+        # this is necessary if dealing with a network stream for instance
+        whence = 0
+        if origin == SeekOrigin.START:
+            whence = 0
+        elif origin == SeekOrigin.CURRENT:
+            whence = 1
+        self.file.seek(offset, whence)
+        return True
 
 
-def memory_stream(soundfile: miniaudio.DecodedSoundFile) -> miniaudio.PlaybackCallbackGeneratorType:
-    required_frames = yield b""  # generator initialization
-    current = 0
-    samples = memoryview(soundfile.samples)     # avoid needless memory copying
-    while current < len(samples):
-        sample_count = required_frames * soundfile.nchannels
-        output = samples[current:current + sample_count]
-        current += sample_count
-        print(".", end="", flush=True)
-        required_frames = yield output
-
-
-device = miniaudio.PlaybackDevice(app_name="Playback Example #2")
-decoded = miniaudio.decode_file(samples_path("music.mp3"))
-print("The decoded file has {} frames at {} hz and takes {:.1f} seconds"
-      .format(decoded.num_frames, decoded.sample_rate, decoded.duration))
-stream = memory_stream(decoded)
-next(stream)  # start the generator
+print("Audio file playing in the background. Press enter to stop playback. ")
+source = FileSource("music.ogg")
+stream = miniaudio.stream_any(source)
+device = miniaudio.PlaybackDevice()
 device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
+
+input()
 device.close()

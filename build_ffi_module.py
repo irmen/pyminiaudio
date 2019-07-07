@@ -556,6 +556,7 @@ typedef struct ma_decoder
 {
     ma_decoder_read_proc onRead;
     ma_decoder_seek_proc onSeek;
+    void* pUserData;
     ma_format  outputFormat;
     ma_uint32  outputChannels;
     ma_uint32  outputSampleRate;
@@ -692,6 +693,9 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     /* ma_pcm_converter_read_proc */
     extern "Python" ma_uint32 _internal_dsp_read_callback(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
+    /* decoder read and seek callbacks */
+    extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
+    extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
 
 """
 

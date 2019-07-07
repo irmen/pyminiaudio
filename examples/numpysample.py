@@ -1,3 +1,7 @@
+"""
+Shows the support for numpy arrays as pcm sample data.
+"""
+
 import os
 import numpy
 import miniaudio
