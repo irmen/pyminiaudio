@@ -989,7 +989,7 @@ MA_ALIGNED_STRUCT(MA_SIMD_ALIGNMENT) ma_pcm_converter
     ma_bool32 isChannelRoutingRequired       : 1;
     ma_bool32 isSRCRequired                  : 1;
     ma_bool32 isChannelRoutingAtStart        : 1;
-    ma_bool32 isPassthrough                  : 1;      /* <-- Will be set to true when the DSP pipeline is an optimized passthrough. */
+    ma_bool32 isPassthrough                  : 1;      /* <-- Will be set to true when the conversion pipeline is an optimized passthrough. */
 };
 
 
@@ -1344,7 +1344,7 @@ determine the required size of the output buffer.
 
 A return value of 0 indicates an error.
 
-This function is useful for one-off bulk conversions, but if you're streaming data you should use the DSP APIs instead.
+This function is useful for one-off bulk conversions, but if you're streaming data you should use the ma_pcm_converter APIs instead.
 */
 ma_uint64 ma_convert_frames(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_uint64 frameCount);
 ma_uint64 ma_convert_frames_ex(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_channel channelMapOut[MA_MAX_CHANNELS], const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_uint64 frameCount);
@@ -33032,6 +33032,7 @@ v0.9.6 - 2019-xx-xx
   - Don't trigger an assert when ma_device_start() is called on a device that is already started. This will now log a warning
     and return MA_INVALID_OPERATION. The same applies for ma_device_stop().
   - Try fixing an issue with PulseAudio taking a long time to start playback.
+  - Fix a bug in ma_convert_frames() and ma_convert_frames_ex().
 
 v0.9.5 - 2019-05-21
   - Add logging to ma_dlopen() and ma_dlsym().

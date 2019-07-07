@@ -34,14 +34,14 @@ def produce_data(src: io.BytesIO, nchannels: int, samplewidth: int) -> miniaudio
 producer = produce_data(src, decoded.nchannels, decoded.sample_width)
 next(producer)    # start the generator
 
-dsp = miniaudio.StreamingConverter(decoded.sample_format, decoded.nchannels, decoded.sample_rate,
-                                   miniaudio.SampleFormat.UNSIGNED8, 1, 12000, producer,
-                                   miniaudio.DitherMode.TRIANGLE)
+converter = miniaudio.StreamingConverter(decoded.sample_format, decoded.nchannels, decoded.sample_rate,
+                                         miniaudio.SampleFormat.UNSIGNED8, 1, 12000, producer,
+                                         miniaudio.DitherMode.TRIANGLE)
 
 print("Stream format conversion of source:")
 framechunks = []
 while True:
-    framedata = dsp.convert(4000)
+    framedata = converter.read(4000)
     if not framedata:
         break
     print("got chunk of size", len(framedata))
@@ -53,7 +53,7 @@ print("\nGot", len(framechunks), "total frame chunks")
 samples = array.array('B')
 for f in framechunks:
     samples.extend(f)
-outputfile = miniaudio.DecodedSoundFile("converted", dsp.out_channels, dsp.out_samplerate, dsp.out_format, samples)
+outputfile = miniaudio.DecodedSoundFile("converted", converter.out_channels, converter.out_samplerate, converter.out_format, samples)
 miniaudio.wav_write_file("converted.wav", outputfile)
 
 print("\nConverted sound written to ./converted.wav")

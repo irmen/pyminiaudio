@@ -23,7 +23,6 @@ def memory_stream(npa: numpy.ndarray) -> miniaudio.PlaybackCallbackGeneratorType
 
 device = miniaudio.PlaybackDevice()
 decoded = miniaudio.decode_file(samples_path("music.wav"))
-print(decoded)
 
 # convert the sample data into a numpy array with shape (numframes, numchannels):
 npa = numpy.array(decoded.samples, dtype=numpy.int16).reshape((-1, decoded.nchannels))

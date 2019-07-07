@@ -14,10 +14,10 @@ def choose_device():
     devices = miniaudio.Devices()
     print("Available playback devices:")
     playbacks = devices.get_playbacks()
-    for d in enumerate(playbacks):
+    for d in enumerate(playbacks, 1):
         print("{num} = {name}".format(num=d[0], name=d[1]['name']))
     choice = int(input("play on which device? "))
-    return playbacks[choice]
+    return playbacks[choice-1]
 
 
 if __name__ == "__main__":

@@ -454,7 +454,7 @@ typedef struct ma_decoder ma_decoder;
 typedef void (* ma_device_callback_proc)(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 typedef void (* ma_stop_proc)(ma_device* pDevice);
 typedef void (* ma_log_proc)(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message);
-typedef ma_uint32 (* ma_pcm_converter_read_proc)(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
+typedef ma_uint32 (* ma_pcm_converter_read_proc)(ma_pcm_converter* pConverter, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
 typedef size_t    (* ma_decoder_read_proc)                    (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead); /* Returns the number of bytes read. */
 typedef ma_bool32 (* ma_decoder_seek_proc)                    (ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
 
@@ -671,9 +671,9 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_bool32 ma_channel_map_blank(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS]);
     ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS], ma_channel channelPosition);
 
-    /*** DSP streaming sound conversion ***/
-    ma_result ma_pcm_converter_init(const ma_pcm_converter_config* pConfig, ma_pcm_converter* pDSP);
-    ma_uint64 ma_pcm_converter_read(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint64 frameCount);
+    /*** streaming sound conversion ***/
+    ma_result ma_pcm_converter_init(const ma_pcm_converter_config* pConfig, ma_pcm_converter* pConverter);
+    ma_uint64 ma_pcm_converter_read(ma_pcm_converter* pConverter, void* pFramesOut, ma_uint64 frameCount);
     ma_pcm_converter_config ma_pcm_converter_config_init_new(void);
     ma_pcm_converter_config ma_pcm_converter_config_init(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_pcm_converter_read_proc onRead, void* pUserData);
     ma_pcm_converter_config ma_pcm_converter_config_init_ex(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut,  ma_channel channelMapOut[MA_MAX_CHANNELS], ma_pcm_converter_read_proc onRead, void* pUserData);
@@ -692,7 +692,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     /* ma_device_callback_proc */
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     /* ma_pcm_converter_read_proc */
-    extern "Python" ma_uint32 _internal_dsp_read_callback(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
+    extern "Python" ma_uint32 _internal_pcmconverter_read_callback(ma_pcm_converter* pConverter, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
     /* decoder read and seek callbacks */
     extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
     extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);

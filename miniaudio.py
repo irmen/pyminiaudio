@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.6.dev0"
+__version__ = "1.6"
 
 
 import abc
@@ -1150,7 +1150,7 @@ def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CDa
         return
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
     callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
-    callback_device.data_callback(device, output, input, framecount)
+    callback_device._data_callback(device, output, input, framecount)
 
 
 class AbstractDevice:
@@ -1250,7 +1250,7 @@ class CaptureDevice(AbstractDevice):
         (it should already be started before)"""
         return super().start(callback_generator)
 
-    def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
+    def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         if self.callback_generator:
             buffer_size = self.sample_width * self.nchannels * framecount
             data = bytearray(buffer_size)
@@ -1305,7 +1305,7 @@ class PlaybackDevice(AbstractDevice):
         The generator should already be started before passing it in."""
         return super().start(callback_generator)
 
-    def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
+    def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         if self.callback_generator:
             try:
                 samples = self.callback_generator.send(framecount)
@@ -1369,7 +1369,7 @@ class DuplexStream(AbstractDevice):
         (it should already be started before passing it in)"""
         return super().start(callback_generator)
 
-    def data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
+    def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         buffer_size = self.sample_width * self.capture_channels * framecount
         in_data = bytearray(buffer_size)
         ffi.memmove(in_data, input, buffer_size)
@@ -1449,22 +1449,24 @@ class WavFileReadStream(io.RawIOBase):
         pass
 
 
-_callback_dsp = {}      # type: Dict[int, StreamingConverter]
+_callback_converter = {}      # type: Dict[int, StreamingConverter]
 
 # this lowlevel callback function is used in the StreamingConverter streaming audio conversion
 # to produce input PCM audio frames. There is some trickery going on with the
 # userdata that contains an id into the dictionary to link back to the Python object
 # that the callback originates from.
 @ffi.def_extern()
-def _internal_dsp_read_callback(dsp: ffi.CData, frames: ffi.CData, framecount: int, userdata: ffi.CData) -> int:
+def _internal_pcmconverter_read_callback(converter: ffi.CData, frames: ffi.CData,
+                                         framecount: int, userdata: ffi.CData) -> int:
     if framecount <= 0 or not userdata:
         return framecount
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", userdata), struct.calcsize('q')))[0]
-    callback_dsp = _callback_dsp[userdata_id]
-    return callback_dsp.read_callback(dsp, frames, framecount)
+    callback_converter = _callback_converter[userdata_id]
+    return callback_converter._read_callback(converter, frames, framecount)
 
 
 class StreamingConverter:
+    """Sample format converter that works on streams stream, rather than doing all at once."""
     def __init__(self, in_format: SampleFormat, in_channels: int, in_samplerate: int,
                  out_format: SampleFormat, out_channels: int, out_samplerate: int,
                  frame_producer: PlaybackCallbackGeneratorType,
@@ -1472,14 +1474,14 @@ class StreamingConverter:
         if not inspect.isgenerator(frame_producer):
             raise TypeError("producer must be a generator", type(frame_producer))
         self.frame_producer = frame_producer        # type: Optional[PlaybackCallbackGeneratorType]
-        _callback_dsp[id(self)] = self
+        _callback_converter[id(self)] = self
         self._userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
         self._conv_config = lib.ma_pcm_converter_config_init(
             in_format.value, in_channels, in_samplerate, out_format.value, out_channels, out_samplerate,
-            lib._internal_dsp_read_callback, self._userdata_ptr)
+            lib._internal_pcmconverter_read_callback, self._userdata_ptr)
         self._conv_config.ditherMode = dither.value
-        self._dsp = ffi.new("ma_pcm_converter*")
-        result = lib.ma_pcm_converter_init(ffi.addressof(self._conv_config), self._dsp)
+        self._converter = ffi.new("ma_pcm_converter*")
+        result = lib.ma_pcm_converter_init(ffi.addressof(self._conv_config), self._converter)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init pcm_converter", result)
         self.in_format = in_format
@@ -1495,18 +1497,19 @@ class StreamingConverter:
         self.close()
 
     def close(self) -> None:
-        if id(self) in _callback_dsp:
-            del _callback_dsp[id(self)]
+        if id(self) in _callback_converter:
+            del _callback_converter[id(self)]
 
-    def convert(self, num_frames: int) -> array.array:
+    def read(self, num_frames: int) -> array.array:
+        """Read a chunk of frames from the source and return the given number of converted frames."""
         frames = bytearray(num_frames * self.out_channels * self.out_samplewidth)
-        num_converted_frames = lib.ma_pcm_converter_read(self._dsp, ffi.from_buffer(frames), num_frames)
+        num_converted_frames = lib.ma_pcm_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
         result = _array_proto_from_format(self.out_format)
         buf = memoryview(frames)[0:num_converted_frames * self.out_channels * self.out_samplewidth]
         result.frombytes(buf)       # type: ignore
         return result
 
-    def read_callback(self, dsp: ffi.CData, frames: ffi.CData, framecount: int) -> int:
+    def _read_callback(self, converter: ffi.CData, frames: ffi.CData, framecount: int) -> int:
         if self.frame_producer:
             try:
                 data = self.frame_producer.send(framecount)
