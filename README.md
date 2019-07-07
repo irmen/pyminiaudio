@@ -17,7 +17,13 @@ This module provides:
   - audio playback
   - audio recording
 
-Audio playback and recording are done with an efficient generator based pull-API.
+This library aims to provide a Pythonic interface to the miniaudio C library.
+Some of the main aspects of this are:
+ - Python enums instead of just some integers for special values,
+ - several classes to represent the main functions of the library,
+ - generators for the Audio playback, recording and conversion streaming
+ - sample data is usually in the form of a Python ``array`` with appropriately sized elements
+   depending on the sample width (rather than a raw block of bytes)
  
 
 *Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).* 
@@ -50,34 +56,7 @@ input("Audio file playing in the background. Enter to stop playback: ")
 device.close()
 ```
 
-### Playback using several other API functions
-
-```python
-import miniaudio
-
-def memory_stream(soundfile: miniaudio.DecodedSoundFile) -> miniaudio.PlaybackCallbackGeneratorType:
-    required_frames = yield b""  # generator initialization
-    current = 0
-    samples = memoryview(soundfile.samples)     # avoid needless memory copying
-    while current < len(samples):
-        sample_count = required_frames * soundfile.nchannels
-        output = samples[current:current + sample_count]
-        current += sample_count
-        print(".", end="", flush=True)
-        required_frames = yield output
-
-device = miniaudio.PlaybackDevice()
-decoded = miniaudio.decode_file("samples/music.mp3")
-print("The decoded file has {} frames at {} hz and takes {:.1f} seconds"
-      .format(decoded.num_frames, decoded.sample_rate, decoded.duration))
-stream = memory_stream(decoded)
-next(stream)  # start the generator
-device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
-device.close()
-```
-
-### Playback of a file format that miniaudio can't decode by itself
+### Playback of an unsupported file format
 
 This example uses ffmpeg as an external tool to decode an audio file in a format
 that miniaudio itself can't decode (m4a/aac in this case):
