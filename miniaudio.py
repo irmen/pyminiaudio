@@ -1035,10 +1035,13 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
 
 _callback_data = {}     # type: Dict[int, Union[PlaybackDevice, CaptureDevice, DuplexStream]]
 
-
+# this lowlevel callback function is used in the Plaback/Capture/Duplex devices,
+# to process the data that is flowing. There is some trickery going on with the
+# userdata that contains an id into the dictionary to link back to the Python object
+# that the callback originates from
 @ffi.def_extern()
 def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
-    if framecount == 0 or not device.pUserData:
+    if framecount <= 0 or not device.pUserData:
         return
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
     callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
@@ -1345,3 +1348,80 @@ class WavFileReadStream(io.RawIOBase):
     def close(self) -> None:
         """Close the file"""
         pass
+
+
+_callback_dsp = {}      # type: Dict[int, DspConverter]
+
+# this lowlevel callback function is used in the StreamingConverter streaming audio conversion
+# to produce input audio frames. There is some trickery going on with the
+# userdata that contains an id into the dictionary to link back to the Python object
+# that the callback originates from.
+@ffi.def_extern()
+def _internal_dsp_read_callback(dsp: ffi.CData, frames: ffi.CData, framecount: int, userdata: ffi.CData) -> int:
+    if framecount <= 0 or not userdata:
+        return framecount
+    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", userdata), struct.calcsize('q')))[0]
+    callback_dsp = _callback_dsp[userdata_id]
+    return callback_dsp.read_callback(dsp, frames, framecount)
+
+
+class StreamingConverter:
+    def __init__(self, in_format: SampleFormat, in_channels: int, in_samplerate: int,
+                 out_format: SampleFormat, out_channels: int, out_samplerate: int,
+                 frame_producer: PlaybackCallbackGeneratorType,
+                 dither: DitherMode = DitherMode.NONE) -> None:
+        if not inspect.isgenerator(frame_producer):
+            raise TypeError("producer must be a generator", type(frame_producer))
+        self.frame_producer = frame_producer
+        _callback_dsp[id(self)] = self
+        self._userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
+        self._conv_config = lib.ma_pcm_converter_config_init(
+            in_format.value, in_channels, in_samplerate, out_format.value, out_channels, out_samplerate,
+            lib._internal_dsp_read_callback, self._userdata_ptr)
+        self._conv_config.ditherMode = dither.value
+        self._dsp = ffi.new("ma_pcm_converter*")
+        result = lib.ma_pcm_converter_init(ffi.addressof(self._conv_config), self._dsp)
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("failed to init pcm_converter", result)
+        self.in_format = in_format
+        self.in_channels = in_channels
+        self.in_samplerate = in_samplerate
+        self.in_samplewidth = _width_from_format(in_format)
+        self.out_format = out_format
+        self.out_channels = out_channels
+        self.out_samplerate = out_samplerate
+        self.out_samplewidth = _width_from_format(out_format)
+
+    def __del__(self) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if id(self) in _callback_dsp:
+            del _callback_dsp[id(self)]
+
+    def convert(self, num_frames: int) -> array.array:
+        frames = bytearray(num_frames * self.out_channels * self.out_samplewidth)
+        num_converted_frames = lib.ma_pcm_converter_read(self._dsp, ffi.from_buffer(frames), num_frames)
+        result = _array_proto_from_format(self.out_format)
+        buf = memoryview(frames)[0:num_converted_frames * self.out_channels * self.out_samplewidth]
+        result.frombytes(buf)
+        return result
+
+    def read_callback(self, dsp: ffi.CData, frames: ffi.CData, framecount: int) -> int:
+        if self.frame_producer:
+            try:
+                data = self.frame_producer.send(framecount)
+            except StopIteration:
+                self.frame_producer = None
+                return 0
+            except Exception:
+                self.frame_producer = None
+                raise
+            frames_bytes = _bytes_from_generator_samples(data)
+            if frames_bytes:
+                if len(frames_bytes) > framecount * self.in_samplewidth * self.in_channels:
+                    self.frame_producer = None
+                    raise MiniaudioError("number of frames from callback exceeds maximum")
+                ffi.memmove(frames, frames_bytes, len(frames_bytes))
+                return int(len(frames_bytes) / self.in_samplewidth / self.in_channels)
+        return 0

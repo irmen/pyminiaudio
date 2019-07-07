@@ -383,6 +383,19 @@ typedef enum
     ma_channel_mix_mode_default = ma_channel_mix_mode_planar_blend
 } ma_channel_mix_mode;
 
+typedef enum
+{
+    ma_standard_channel_map_microsoft,
+    ma_standard_channel_map_alsa,
+    ma_standard_channel_map_rfc3551,   /* Based off AIFF. */
+    ma_standard_channel_map_flac,
+    ma_standard_channel_map_vorbis,
+    ma_standard_channel_map_sound4,    /* FreeBSD's sound(4). */
+    ma_standard_channel_map_sndio,     /* www.sndio.org/tips.html */
+    ma_standard_channel_map_webaudio = ma_standard_channel_map_flac, /* https://webaudio.github.io/web-audio-api/#ChannelOrdering. Only 1, 2, 4 and 6 channels are defined, but can fill in the gaps with logical assumptions. */
+    ma_standard_channel_map_default = ma_standard_channel_map_microsoft
+} ma_standard_channel_map;
+
 
 typedef enum
 {
@@ -411,6 +424,20 @@ typedef enum
 } ma_share_mode;
 
 
+typedef enum
+{
+    ma_src_algorithm_linear = 0,
+    ma_src_algorithm_sinc,
+    ma_src_algorithm_none,
+    ma_src_algorithm_default = ma_src_algorithm_linear
+} ma_src_algorithm;
+
+typedef enum
+{
+    ma_seek_origin_start,
+    ma_seek_origin_current
+} ma_seek_origin;
+
 typedef union ma_device_id {
     ...;
 } ma_device_id;
@@ -421,10 +448,15 @@ typedef struct ma_context {
 
 typedef ma_uint8 ma_channel;
 typedef struct ma_device ma_device;
+typedef struct ma_pcm_converter ma_pcm_converter;
+typedef struct ma_decoder ma_decoder;
 
 typedef void (* ma_device_callback_proc)(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 typedef void (* ma_stop_proc)(ma_device* pDevice);
 typedef void (* ma_log_proc)(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message);
+typedef ma_uint32 (* ma_pcm_converter_read_proc)(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
+typedef size_t    (* ma_decoder_read_proc)                    (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead); /* Returns the number of bytes read. */
+typedef ma_bool32 (* ma_decoder_seek_proc)                    (ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
 
 
 struct ma_device {
@@ -522,14 +554,55 @@ typedef struct
 
 typedef struct ma_decoder
 {
-    /* ma_decoder_read_proc onRead; */
-    /* ma_decoder_seek_proc onSeek; */
+    ma_decoder_read_proc onRead;
+    ma_decoder_seek_proc onSeek;
     ma_format  outputFormat;
     ma_uint32  outputChannels;
     ma_uint32  outputSampleRate;
 
     ...;
 } ma_decoder;
+
+
+typedef struct
+{
+    ...;
+} ma_src_config_sinc;
+
+typedef struct
+{
+    ma_format formatIn;
+    ma_uint32 channelsIn;
+    ma_uint32 sampleRateIn;
+    ma_channel channelMapIn[MA_MAX_CHANNELS];
+    ma_format formatOut;
+    ma_uint32 channelsOut;
+    ma_uint32 sampleRateOut;
+    ma_channel channelMapOut[MA_MAX_CHANNELS];
+    ma_channel_mix_mode channelMixMode;
+    ma_dither_mode ditherMode;
+    ma_src_algorithm srcAlgorithm;
+    ma_bool32 allowDynamicSampleRate;
+    ma_bool32 neverConsumeEndOfInput : 1;  /* <-- For SRC. */
+    ma_bool32 noSSE2   : 1;
+    ma_bool32 noAVX2   : 1;
+    ma_bool32 noAVX512 : 1;
+    ma_bool32 noNEON   : 1;
+    ma_pcm_converter_read_proc onRead;
+    void* pUserData;
+    union
+    {
+        ma_src_config_sinc sinc;
+    };
+} ma_pcm_converter_config;
+
+struct ma_pcm_converter
+{
+    ma_pcm_converter_read_proc onRead;
+    void* pUserData;
+    
+    ...;
+};
 
 
 typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_device_type deviceType, const ma_device_info* pInfo, void* pUserData);
@@ -554,6 +627,13 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outputChannels, ma_uint32 outputSampleRate);
 
     /**** decoding ****/
+    ma_result ma_decoder_init(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+    ma_result ma_decoder_init_wav(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+    ma_result ma_decoder_init_flac(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+    ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+    ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+    ma_result ma_decoder_init_raw(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
+
     ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_flac(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
@@ -582,6 +662,22 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_uint64 ma_convert_frames_ex(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_channel channelMapOut[MA_MAX_CHANNELS], const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_uint64 frameCount);
     ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
     
+    /*** channel maps ***/
+    void ma_get_standard_channel_map(ma_standard_channel_map standardChannelMap, ma_uint32 channels, ma_channel channelMap[MA_MAX_CHANNELS]);
+    void ma_channel_map_copy(ma_channel* pOut, const ma_channel* pIn, ma_uint32 channels);
+    ma_bool32 ma_channel_map_valid(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS]);
+    ma_bool32 ma_channel_map_equal(ma_uint32 channels, const ma_channel channelMapA[MA_MAX_CHANNELS], const ma_channel channelMapB[MA_MAX_CHANNELS]);
+    ma_bool32 ma_channel_map_blank(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS]);
+    ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS], ma_channel channelPosition);
+
+    /*** DSP streaming sound conversion ***/
+    ma_result ma_pcm_converter_init(const ma_pcm_converter_config* pConfig, ma_pcm_converter* pDSP);
+    ma_uint64 ma_pcm_converter_read(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint64 frameCount);
+    ma_pcm_converter_config ma_pcm_converter_config_init_new(void);
+    ma_pcm_converter_config ma_pcm_converter_config_init(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_pcm_converter_read_proc onRead, void* pUserData);
+    ma_pcm_converter_config ma_pcm_converter_config_init_ex(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut,  ma_channel channelMapOut[MA_MAX_CHANNELS], ma_pcm_converter_read_proc onRead, void* pUserData);
+        
+    
     /**** misc ****/
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
@@ -591,7 +687,11 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     void *malloc(size_t size);
     void free(void *ptr);
 
+    /**** callbacks ****/
+    /* ma_device_callback_proc */
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
+    /* ma_pcm_converter_read_proc */
+    extern "Python" ma_uint32 _internal_dsp_read_callback(ma_pcm_converter* pDSP, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
 
 """
 
