@@ -14,6 +14,7 @@ Software license: "MIT software license". See http://opensource.org/licenses/MIT
 
 
 import os
+import platform
 from cffi import FFI
 
 miniaudio_include_dir = os.getcwd()
@@ -707,7 +708,9 @@ libraries = []
 compiler_args = []
 if os.name == "posix":
     libraries = ["m", "pthread", "dl"]
-    compiler_args = ["-g1", "-O3", "-msse", "-mfpmath=sse", "-ffast-math"]
+    compiler_args = ["-g1", "-O3", "-ffast-math"]
+    if "86" in platform.machine():
+        compiler_args.extend([ "-msse", "-mfpmath=sse"])
 
 
 ffibuilder.set_source("_miniaudio", """
