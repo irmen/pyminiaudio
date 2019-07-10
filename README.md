@@ -5,6 +5,9 @@
 
 # Python miniaudio
 
+Multiplatform audio playback, recording, decoding and sample format conversion for
+Linux (including Raspberri Pi), Windows, Mac and probably other systems such as BSD.
+
 This module provides:
 
 - the [miniaudio](https://github.com/dr-soft/miniaudio/) cross platform sound playback, recording and conversion library
