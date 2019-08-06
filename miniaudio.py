@@ -16,7 +16,7 @@ import array
 import struct
 import inspect
 from enum import Enum
-from typing import Generator, List, Tuple, Dict, Optional, Union, Any, Callable
+from typing import Generator, List, Dict, Optional, Union, Any, Callable
 from _miniaudio import ffi, lib
 try:
     import numpy
