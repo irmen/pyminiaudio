@@ -1,9 +1,6 @@
 import unittest
 import miniaudio
-from multiprocessing import Process
-from threading import Thread
-from unittest import  mock
-from time import sleep
+from unittest import mock
 
 
 def dummy_generator():
