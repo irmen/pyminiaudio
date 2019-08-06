@@ -53,6 +53,15 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
             elif inspect.isfunction(item):
                 documentable_functions.append((item.__name__, item))
     print("\n\n===================  GENERATED API DOCS  =================\n\n")
+    for name, enumk in sorted(documentable_enums):
+        doc = inspect.cleandoc(enumk.__doc__ or "")
+        if not doc:
+            continue    # don't output if no docstring
+        print("*enum class*  ``{}``".format(name))
+        print(" names:  ``{}``".format("`` ``".join(e.name for e in list(enumk))))
+        for line in textwrap.wrap("> "+doc, width):
+            print(line)
+        print("\n")
     for name, func in sorted(documentable_functions):
         doc = inspect.cleandoc(func.__doc__ or "")
         if not doc:
@@ -60,16 +69,7 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         sig = str(inspect.signature(func))
         if sig.endswith("-> None"):
             sig = sig[:-7]
-        print("*function*  ``{}  {}``\n".format(name, sig))
-        for line in textwrap.wrap("> "+doc, width):
-            print(line)
-        print("\n")
-    for name, enumk in sorted(documentable_enums):
-        doc = inspect.cleandoc(enumk.__doc__ or "")
-        if not doc:
-            continue    # don't output if no docstring
-        print("*enum class*  ``{}``".format(name))
-        print(" names:  ``{}``\n".format("`` ``".join(e.name for e in list(enumk))))
+        print("*function*  ``{}  {}``".format(name, sig))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
         print("\n")
@@ -81,10 +81,10 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
         if sig.endswith("-> None"):
             sig = sig[:-7]
         print("*class*  ``{}``\n".format(name))
-        print("``{}  {}``\n".format(name, sig))
+        print("``{}  {}``".format(name, sig))
         for line in textwrap.wrap("> "+doc, width):
             print(line)
-        print("\n")
+        print()
         # methods
         for mname, method in inspect.getmembers(klass, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
             doc = inspect.cleandoc(method.__doc__ or "")
@@ -93,8 +93,9 @@ def make_md_docs(modulename: str = "miniaudio", width: int = 100) -> None:
             sig = str(inspect.signature(method))
             if sig.endswith("-> None"):
                 sig = sig[:-7]
-            print("> *method*  ``{}  {}``\n".format(mname, sig))
+            print("> *method*  ``{}  {}``".format(mname, sig))
             for line in textwrap.wrap("> > "+doc, width):
                 print(line)
-            print("\n")
+            print()
+        print()
     print()

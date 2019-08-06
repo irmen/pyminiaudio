@@ -1,6 +1,8 @@
 # Project specific
 Pipfile
 NOTES.md
+# FFI Builds
+*.so
 
 # Virtual enviroment
 /.venv/
@@ -12,6 +14,7 @@ NOTES.md
 __pycache__/
 *.py[cod]
 *$py.class
+.cache/
 # output samples, but don't exclude the samples dir
 *.wav
 *.mp3
@@ -19,8 +22,7 @@ __pycache__/
 .mypy_cache/
 .eggs/
 .pytest_cache/
-.idea/workspace.xml
-.idea/dictionaries/*.xml
+.idea/
 build
 dist
 *.egg-info/

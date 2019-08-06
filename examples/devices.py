@@ -1,6 +1,10 @@
+"""
+List the available audio devices.
+"""
+
 import miniaudio
 
-devices = miniaudio.Devices()
+devices = miniaudio.Devices(backends=[])
 print("Backend: {}".format(devices.backend))
 
 out_devices = devices.get_playbacks()
