@@ -15,21 +15,11 @@ sudo: false
 
 before_install:
   - sudo apt-get update -qq
-  - sudo usermod -a -G audio travis
-  - sudo apt-get install -y portaudio19-dev
-  - sudo apt-get install -y libasound2-dev alsa-utils alsa-oss
-  - sudo bash tests/prep-dummy-soundcard.sh
   - sudo apt-get install -y jackd2 libjack-jackd2-0
   - jackd -ntest -ddummy -r48000 -p1024&
-env:
-  global:
-    - AUDIODEV=null
 install:
   - pip install .
+  - pip install -r requirements-dev.txt
 script:
-  - aplay -l
-  - lspci -v | grep -A7 -i "audio"
-  - lsmod | grep snd
-  - amixer -c 0
-  - python setup.py test
+  - pytest tests/
   - python -E -Wall -bb -c 'import miniaudio'
