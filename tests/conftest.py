@@ -22,7 +22,7 @@ def backends():
     else:
         return []
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def jackd_server():
     if environ.get("TRAVIS"):
         cmdstr = 'jackd -n{} -ddummy -r48000 -p1024'.format(JACK_SERVER_NAME)
