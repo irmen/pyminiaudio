@@ -18,5 +18,9 @@ env:
 install:
   - pip install .
 script:
+  - aplay -l
+  - lspci -v | grep -A7 -i "audio"
+  - lsmod | grep snd
+  - amixer -c 0
   - python setup.py test
   - python -E -Wall -bb -c 'import miniaudio'
