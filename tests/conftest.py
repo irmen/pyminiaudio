@@ -25,7 +25,7 @@ def backends():
 @pytest.fixture()
 def jackd_server():
     if environ.get("TRAVIS"):
-        cmdstr = f'jackd -n{JACK_SERVER_NAME} -ddummy -r48000 -p1024'
+        cmdstr = 'jackd -n{} -ddummy -r48000 -p1024'.format(JACK_SERVER_NAME)
         proc = subprocess.Popen(shlex.split(cmdstr))
         sleep(1)
         yield
