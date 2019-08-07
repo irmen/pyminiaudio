@@ -16,7 +16,6 @@ sudo: false
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y jackd2 libjack-jackd2-0
-  - jackd -ntest -ddummy -r48000 -p1024&
 install:
   - pip install .
   - pip install -r requirements-dev.txt
