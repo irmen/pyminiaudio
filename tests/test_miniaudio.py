@@ -6,6 +6,10 @@ from os import environ
 
 backends = [miniaudio.Backend.JACK]
 
+environ['JACK_DEFAULT_SERVER'] = 'test'
+environ['JACK_NO_START_SERVER'] = '1'
+
+
 def dummy_generator():
     yield
 
