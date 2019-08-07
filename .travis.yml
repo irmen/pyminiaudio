@@ -19,6 +19,7 @@ before_install:
   - sudo apt-get install -y portaudio19-dev
   - sudo apt-get install -y libasound2-dev alsa-utils alsa-oss
   - sudo bash tests/prep-dummy-soundcard.sh
+  - sudo apt-get install -y jackd2 libjack-jackd2-0
 env:
   global:
     - AUDIODEV=null
