@@ -1,6 +1,7 @@
 import subprocess
 import shlex
 import pytest
+import miniaudio
 
 from os import environ
 from time import sleep
@@ -22,7 +23,7 @@ def backends():
 @pytest.fixture(scope="session")
 def jackd_server():
     if environ.get("TRAVIS"):
-        cmdstr = 'jackd -n{} -ddummy -r48000 -p1024'.format(JACK_SERVER_NAME)
+        cmdstr = 'jackd -n{} -m -v -ddummy -r48000 -p1024'.format(JACK_SERVER_NAME)
         proc = subprocess.Popen(shlex.split(cmdstr))
         sleep(1)
         yield
