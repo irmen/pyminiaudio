@@ -1,12 +1,9 @@
-import unittest
-import miniaudio
-from unittest import mock
-from os import environ
-import pytest
 import subprocess
-from time import sleep
-import pytest
 import shlex
+import pytest
+
+from os import environ
+from time import sleep
 
 
 JACK_SERVER_NAME = 'test'

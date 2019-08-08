@@ -1,4 +1,3 @@
-import unittest
 import miniaudio
 from unittest import mock
 
