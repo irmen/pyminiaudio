@@ -18,6 +18,7 @@ before_install:
   - sudo apt-get install -y jackd2 libjack-jackd2-0
   - cat /etc/security/limits.conf
   - ulimit -l
+  - sudo bash -c "echo '@audio - rtprio 99' >> /etc/security/limits.conf"
   - sudo bash -c "echo '@audio - memlock unlimited' >> /etc/security/limits.conf"
   - sudo adduser $USER audio
   - cat /etc/security/limits.conf
