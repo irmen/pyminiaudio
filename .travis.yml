@@ -19,10 +19,8 @@ before_install:
   - cat /etc/security/limits.conf
   - ulimit -l
   - echo $USER
-  - sudo bash -c "echo '@realtime - rtprio 99' >> /etc/security/limits.conf"
-  - sudo bash -c "echo '@realtime - memlock unlimited' >> /etc/security/limits.conf"
-  - groupadd realtime
-  - usermod -a -G realtime $UID
+  - sudo bash -c "echo '@travis - rtprio 99' >> /etc/security/limits.conf"
+  - sudo bash -c "echo '@travis - memlock unlimited' >> /etc/security/limits.conf"
   - ulimit -l
   - cat /etc/security/limits.conf
 install:
