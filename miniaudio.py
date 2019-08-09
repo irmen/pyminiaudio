@@ -104,6 +104,12 @@ class SeekOrigin(Enum):
     CURRENT = lib.ma_seek_origin_current
 
 
+PlaybackCallbackGeneratorType = Generator[Union[bytes, array.array], int, None]
+CaptureCallbackGeneratorType = Generator[None, Union[bytes, array.array], None]
+DuplexCallbackGeneratorType = Generator[Union[bytes, array.array], Union[bytes, array.array], None]
+GeneratorTypes = Union[PlaybackCallbackGeneratorType, CaptureCallbackGeneratorType, DuplexCallbackGeneratorType]
+
+
 class SoundFileInfo:
     """Contains various properties of an audio file."""
     def __init__(self, name: str, file_format: FileFormat, nchannels: int, sample_rate: int,
@@ -1154,10 +1160,6 @@ def _internal_stop_callback(device: ffi.CData) -> None:
     callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
     callback_device._stop_callback(device)
 
-PlaybackCallbackGeneratorType = Generator[Union[bytes, array.array], int, None]
-CaptureCallbackGeneratorType = Generator[None, Union[bytes, array.array], None]
-DuplexCallbackGeneratorType = Generator[Union[bytes, array.array], Union[bytes, array.array], None]
-GeneratorTypes = Union[PlaybackCallbackGeneratorType, CaptureCallbackGeneratorType, DuplexCallbackGeneratorType]
 
 
 class AbstractDevice:
