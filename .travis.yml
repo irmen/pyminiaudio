@@ -21,7 +21,7 @@ before_install:
   - echo $USER
   - sudo bash -c "echo '@travis - rtprio 99' >> /etc/security/limits.conf"
   - sudo bash -c "echo '@travis - memlock unlimited' >> /etc/security/limits.conf"
-  - sudo ulimit -l 803450
+  - ulimit -l unlimited
   - cat /etc/security/limits.conf
 install:
   - pip install .
