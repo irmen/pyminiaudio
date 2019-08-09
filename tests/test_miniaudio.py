@@ -1,5 +1,14 @@
 import miniaudio
 from unittest import mock
+import sys
+from os import environ
+import pytest
+
+# Skip tests on 3.5 travis for now, due to not enough locked memory being available on travis CI.
+py35skip = pytest.mark.skipif(
+    environ.get("TRAVIS") and sys.version_info[0] == 3 and sys.version_info[1] == 5,
+    reason="Skipping python 3.5 on travis"
+)
 
 
 def dummy_generator():
@@ -11,6 +20,8 @@ def test_devices():
     devs.get_playbacks()
     devs.get_captures()
 
+
+@py35skip
 def test_stop_callback_capture(backends, jackd_server):
     stop_callback = mock.Mock()
 
@@ -20,12 +31,14 @@ def test_stop_callback_capture(backends, jackd_server):
     capture.start(gen, stop_callback)
 
     assert capture.running is True
-    # Force a stop.
+    # Simulate an unexpected stop.
     miniaudio.lib.ma_device_stop(capture._device)
 
     stop_callback.assert_called_once()
     assert capture.running is False
 
+
+@py35skip
 def test_stop_callback_playback(backends, jackd_server):
     stop_callback = mock.Mock()
 
@@ -35,12 +48,14 @@ def test_stop_callback_playback(backends, jackd_server):
     playback.start(gen, stop_callback)
 
     assert playback.running is True
-    # Force a stop.
+    # Simulate an unexpected stop.
     miniaudio.lib.ma_device_stop(playback._device)
 
     stop_callback.assert_called_once()
     assert playback.running is False
 
+
+@py35skip
 def test_stop_callback_duplex(backends, jackd_server):
     stop_callback = mock.Mock()
 
@@ -50,7 +65,7 @@ def test_stop_callback_duplex(backends, jackd_server):
     duplex.start(gen, stop_callback)
 
     assert duplex.running is True
-    # Force a stop.
+    # Simulate an unexpected stop.
     miniaudio.lib.ma_device_stop(duplex._device)
 
     stop_callback.assert_called_once()

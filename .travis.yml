@@ -10,13 +10,12 @@ matrix:
   fast_finish: true
 
 # Use fast travis build infrastructure explicitly
-dist: bionic
+dist: xenial
 sudo: false
 
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y jackd2 libjack-jackd2-0
-  - ulimit -l
 install:
   - pip install .
   - pip install -r requirements-dev.txt

@@ -1161,8 +1161,9 @@ GeneratorTypes = Union[PlaybackCallbackGeneratorType, CaptureCallbackGeneratorTy
 
 
 class AbstractDevice:
+    running: bool = False
+
     def __init__(self):
-        self.running = False # type: Boolean
         self.callback_generator = None          # type: Optional[GeneratorTypes]
         self._device = ffi.new("ma_device *")
 
@@ -1199,7 +1200,7 @@ class AbstractDevice:
         if self._device is not None:
             lib.ma_device_uninit(self._device)
             self._device = None
-        if id(self) in _callback_data:
+        if _callback_data and id(self) in _callback_data:
             del _callback_data[id(self)]
 
     def _stop_callback(self, device: ffi.CData) -> None:
