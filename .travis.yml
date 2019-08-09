@@ -11,7 +11,7 @@ matrix:
 
 # Use fast travis build infrastructure explicitly
 dist: xenial
-sudo: false
+sudo: true
 
 before_install:
   - sudo apt-get update -qq
