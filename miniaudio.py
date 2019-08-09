@@ -1163,10 +1163,9 @@ def _internal_stop_callback(device: ffi.CData) -> None:
 
 
 class AbstractDevice:
-    running: bool = False
-
     def __init__(self):
         self.callback_generator = None          # type: Optional[GeneratorTypes]
+        self.running = False                    # type: bool
         self._device = ffi.new("ma_device *")
 
     def __del__(self) -> None:
