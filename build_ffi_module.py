@@ -602,7 +602,7 @@ struct ma_pcm_converter
 {
     ma_pcm_converter_read_proc onRead;
     void* pUserData;
-    
+
     ...;
 };
 
@@ -669,7 +669,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_uint64 ma_convert_frames(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_uint64 frameCount);
     ma_uint64 ma_convert_frames_ex(void* pOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_channel channelMapOut[MA_MAX_CHANNELS], const void* pIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_uint64 frameCount);
     ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
-    
+
     /*** channel maps ***/
     void ma_get_standard_channel_map(ma_standard_channel_map standardChannelMap, ma_uint32 channels, ma_channel channelMap[MA_MAX_CHANNELS]);
     void ma_channel_map_copy(ma_channel* pOut, const ma_channel* pIn, ma_uint32 channels);
@@ -684,8 +684,8 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_pcm_converter_config ma_pcm_converter_config_init_new(void);
     ma_pcm_converter_config ma_pcm_converter_config_init(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, ma_pcm_converter_read_proc onRead, void* pUserData);
     ma_pcm_converter_config ma_pcm_converter_config_init_ex(ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn, ma_channel channelMapIn[MA_MAX_CHANNELS], ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut,  ma_channel channelMapOut[MA_MAX_CHANNELS], ma_pcm_converter_read_proc onRead, void* pUserData);
-        
-    
+
+
     /**** misc ****/
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
@@ -698,12 +698,13 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     /**** callbacks ****/
     /* ma_device_callback_proc */
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
+    /* ma_stop_proc */
+    extern "Python" void _internal_stop_callback(ma_device* pDevice);
     /* ma_pcm_converter_read_proc */
     extern "Python" ma_uint32 _internal_pcmconverter_read_callback(ma_pcm_converter* pConverter, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
     /* decoder read and seek callbacks */
     extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
     extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
-
 """
 
 ffibuilder = FFI()
@@ -739,7 +740,7 @@ ffibuilder.set_source("_miniaudio", """
 
     /* missing prototype? */
     ma_uint64 ma_calculate_frame_count_after_src(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
-    
+
 
     /* low-level initialization */
     void init_miniaudio(void);

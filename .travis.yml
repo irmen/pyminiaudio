@@ -13,9 +13,12 @@ matrix:
 dist: xenial
 sudo: false
 
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y jackd2 libjack-jackd2-0
 install:
   - pip install .
+  - pip install -r requirements-dev.txt
 script:
-  - python setup.py test
+  - pytest tests/
   - python -E -Wall -bb -c 'import miniaudio'
-
