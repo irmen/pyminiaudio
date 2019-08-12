@@ -290,8 +290,10 @@ def vorbis_read(data: bytes) -> DecodedSoundFile:
         lib.free(output[0])
 
 
-def vorbis_stream_file(filename: str) -> Generator[array.array, None, None]:
-    """Streams the ogg vorbis audio file as interleaved 16 bit signed integer sample arrays segments."""
+def vorbis_stream_file(filename: str, seek_frame: int = 0) -> Generator[array.array, None, None]:
+    """Streams the ogg vorbis audio file as interleaved 16 bit signed integer sample arrays segments.
+    This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
+    Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
     error = ffi.new("int *")
     vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
@@ -303,6 +305,10 @@ def vorbis_stream_file(filename: str) -> Generator[array.array, None, None]:
         decodebuf_ptr1 = ffi.cast("short *", decode_buffer1)
         decode_buffer2 = ffi.new("short[]", 4096 * info.channels)
         decodebuf_ptr2 = ffi.cast("short *", decode_buffer2)
+        if seek_frame > 0:
+            result = lib.stb_vorbis_seek_frame(vorbis, seek_frame)
+            if result <= 0:
+                raise DecodeError("can't seek")
         # note: we decode several frames to reduce the overhead of very small sample sizes a little
         while True:
             num_samples1 = lib.stb_vorbis_get_frame_short_interleaved(vorbis, info.channels, decodebuf_ptr1,
@@ -456,12 +462,18 @@ def flac_read_f32(data: bytes) -> DecodedSoundFile:
         lib.drflac_free(memory)
 
 
-def flac_stream_file(filename: str, frames_to_read: int = 1024) -> Generator[array.array, None, None]:
-    """Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments."""
+def flac_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
+    """Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments.
+    This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
+    Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
     flac = lib.drflac_open_file(filenamebytes)
     if not flac:
         raise DecodeError("could not open/decode file")
+    if seek_frame > 0:
+        result = lib.drflac_seek_to_pcm_frame(flac, seek_frame)
+        if result <= 0:
+            raise DecodeError("can't seek")
     try:
         decodebuffer = ffi.new("drflac_int16[]", frames_to_read * flac.channels)
         buf_ptr = ffi.cast("drflac_int16 *", decodebuffer)
@@ -591,8 +603,10 @@ def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
 
 
 def mp3_stream_file(filename: str, frames_to_read: int = 1024,
-                    want_nchannels: int = 0, want_sample_rate: int = 0) -> Generator[array.array, None, None]:
-    """Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments."""
+                    want_nchannels: int = 0, want_sample_rate: int = 0, seek_frame: int = 0) -> Generator[array.array, None, None]:
+    """Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments.
+    This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
+    Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
     config = ffi.new("drmp3_config *")
     config.outputChannels = want_nchannels
@@ -600,6 +614,10 @@ def mp3_stream_file(filename: str, frames_to_read: int = 1024,
     mp3 = ffi.new("drmp3 *")
     if not lib.drmp3_init_file(mp3, filenamebytes, config):
         raise DecodeError("could not open/decode file")
+    if seek_frame > 0:
+        result = lib.drmp3_seek_to_pcm_frame(mp3, seek_frame)
+        if result <= 0:
+            raise DecodeError("can't seek")
     try:
         decodebuffer = ffi.new("drmp3_int16[]", frames_to_read * mp3.channels)
         buf_ptr = ffi.cast("drmp3_int16 *", decodebuffer)
@@ -751,12 +769,18 @@ def wav_read_f32(data: bytes) -> DecodedSoundFile:
         lib.drwav_free(memory)
 
 
-def wav_stream_file(filename: str, frames_to_read: int = 1024) -> Generator[array.array, None, None]:
-    """Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments."""
+def wav_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
+    """Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments.
+    This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
+    Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
     wav = lib.drwav_open_file(filenamebytes)
     if not wav:
         raise DecodeError("could not open/decode file")
+    if seek_frame > 0:
+        result = lib.drwav_seek_to_pcm_frame(wav, seek_frame)
+        if result <= 0:
+            raise DecodeError("can't seek")
     try:
         decodebuffer = ffi.new("drwav_int16[]", frames_to_read * wav.channels)
         buf_ptr = ffi.cast("drwav_int16 *", decodebuffer)
@@ -986,7 +1010,7 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
 
 def stream_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                 sample_rate: int = 44100, frames_to_read: int = 1024,
-                dither: DitherMode = DitherMode.NONE) -> Generator[array.array, int, None]:
+                dither: DitherMode = DitherMode.NONE, seek_frame: int = 0) -> Generator[array.array, int, None]:
     """
     Convenience generator function to decode and stream any supported audio file
     as chunks of raw PCM samples in the chosen format.
@@ -1002,6 +1026,10 @@ def stream_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED
     result = lib.ma_decoder_init_file(filenamebytes, ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to init decoder", result)
+    if seek_frame > 0:
+        result = lib.ma_decoder_seek_to_pcm_frame(decoder, seek_frame)
+        if result != lib.MA_SUCCESS:
+            raise DecodeError("failed to seek to frame", result)
     g = _samples_stream_generator(frames_to_read, nchannels, output_format, decoder, None)
     dummy = next(g)
     assert len(dummy) == 0
@@ -1048,7 +1076,7 @@ class StreamableSource(abc.ABC):
 def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.UNKNOWN,
                output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                sample_rate: int = 44100, frames_to_read: int = 1024,
-               dither: DitherMode = DitherMode.NONE) -> Generator[array.array, int, None]:
+               dither: DitherMode = DitherMode.NONE, seek_frame: int = 0) -> Generator[array.array, int, None]:
     """
     Convenience generator function to decode and stream any source of encoded audio data
     (such as a network stream). Stream result is chunks of raw PCM samples in the chosen format.
@@ -1073,6 +1101,10 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
                           source.userdata_ptr, ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to init decoder", result)
+    if seek_frame > 0:
+        result = lib.ma_decoder_seek_to_pcm_frame(decoder, seek_frame)
+        if result != lib.MA_SUCCESS:
+            raise DecodeError("failed to seek to frame", result)
 
     def on_close() -> None:
         if id(source) in _callback_decoder_sources:
