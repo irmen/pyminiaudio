@@ -462,7 +462,8 @@ def flac_read_f32(data: bytes) -> DecodedSoundFile:
         lib.drflac_free(memory)
 
 
-def flac_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
+def flac_stream_file(filename: str, frames_to_read: int = 1024,
+                     seek_frame: int = 0) -> Generator[array.array, None, None]:
     """Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
@@ -603,7 +604,8 @@ def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
 
 
 def mp3_stream_file(filename: str, frames_to_read: int = 1024,
-                    want_nchannels: int = 0, want_sample_rate: int = 0, seek_frame: int = 0) -> Generator[array.array, None, None]:
+                    want_nchannels: int = 0, want_sample_rate: int = 0,
+                    seek_frame: int = 0) -> Generator[array.array, None, None]:
     """Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
@@ -769,7 +771,8 @@ def wav_read_f32(data: bytes) -> DecodedSoundFile:
         lib.drwav_free(memory)
 
 
-def wav_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
+def wav_stream_file(filename: str, frames_to_read: int = 1024,
+                    seek_frame: int = 0) -> Generator[array.array, None, None]:
     """Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
@@ -1184,6 +1187,7 @@ def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CDa
     callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
     callback_device._data_callback(device, output, input, framecount)
 
+
 @ffi.def_extern()
 def _internal_stop_callback(device: ffi.CData) -> None:
     if not device.pUserData:
@@ -1191,7 +1195,6 @@ def _internal_stop_callback(device: ffi.CData) -> None:
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
     callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
     callback_device._stop_callback(device)
-
 
 
 class AbstractDevice:
@@ -1300,7 +1303,8 @@ class CaptureDevice(AbstractDevice):
             raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: CaptureCallbackGeneratorType, stop_callback: Union[Callable, None] = None) -> None:      # type: ignore
+    def start(self, callback_generator: CaptureCallbackGeneratorType,
+              stop_callback: Union[Callable, None] = None) -> None:      # type: ignore
         """Start the audio device: capture (recording) begins.
         The recorded audio data is sent to the given callback generator as raw bytes.
         (it should already be started before)"""
@@ -1355,7 +1359,8 @@ class PlaybackDevice(AbstractDevice):
             raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: PlaybackCallbackGeneratorType, stop_callback: Union[Callable, None] = None) -> None:     # type: ignore
+    def start(self, callback_generator: PlaybackCallbackGeneratorType,
+              stop_callback: Union[Callable, None] = None) -> None:     # type: ignore
         """Start the audio device: playback begins. The audio data is provided by the given callback generator.
         The generator gets sent the required number of frames and should yield the sample data
         as raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
@@ -1420,7 +1425,8 @@ class DuplexStream(AbstractDevice):
             raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: DuplexCallbackGeneratorType, stop_callback: Union[Callable, None] = None) -> None:   # type: ignore
+    def start(self, callback_generator: DuplexCallbackGeneratorType,
+              stop_callback: Union[Callable, None] = None) -> None:   # type: ignore
         """Start the audio device: playback and capture begin.
         The audio data for playback is provided by the given callback generator, which is sent the
         recorded audio data at the same time.

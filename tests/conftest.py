@@ -20,6 +20,7 @@ def backends():
     else:
         return []
 
+
 @pytest.fixture(scope="session")
 def jackd_server():
     if environ.get("TRAVIS"):

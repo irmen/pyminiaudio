@@ -53,7 +53,8 @@ print("\nGot", len(framechunks), "total frame chunks")
 samples = array.array('B')
 for f in framechunks:
     samples.extend(f)
-outputfile = miniaudio.DecodedSoundFile("converted", converter.out_channels, converter.out_samplerate, converter.out_format, samples)
+outputfile = miniaudio.DecodedSoundFile("converted", converter.out_channels,
+                                        converter.out_samplerate, converter.out_format, samples)
 miniaudio.wav_write_file("converted.wav", outputfile)
 
 print("\nConverted sound written to ./converted.wav")
