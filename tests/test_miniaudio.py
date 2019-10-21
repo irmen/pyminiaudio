@@ -70,3 +70,32 @@ def test_stop_callback_duplex(backends, jackd_server):
 
     stop_callback.assert_called_once()
     assert duplex.running is False
+
+
+def test_cffi_api_calls_parameters_correct():
+    import ast
+    import inspect
+    cffi_module = miniaudio
+    tree = ast.parse(inspect.getsource(cffi_module))
+    errors = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if isinstance(node.func.value, ast.Name):
+                if node.func.value.id == "lib":
+                    lineno = node.func.value.lineno
+                    column = node.func.value.col_offset
+                    try:
+                        cffi_func = getattr(cffi_module.lib, node.func.attr)
+                    except AttributeError:
+                        errors.append(AttributeError("calling undefined cffi function: lib.{}  at line {} col {} of {}"
+                                                     .format(node.func.attr, lineno, column, cffi_module.__file__)))
+                    else:
+                        ftype = cffi_module.ffi.typeof(cffi_func)
+                        if len(node.args) != len(ftype.args):
+                            errors.append(TypeError("cffi function lib.{} expected {} args, called with {} args  at line {} col {} of {}"
+                                            .format(node.func.attr, len(ftype.args), len(node.args), lineno, column, cffi_module.__file__)))
+            elif isinstance(node.func.value, ast.Subscript):
+                if node.func.value.value.func.value.value.id == "lib":
+                    raise NotImplementedError("failed to check subscript Ast node")
+    if errors:
+        raise TypeError(errors)
