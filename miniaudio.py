@@ -638,8 +638,8 @@ def mp3_stream_file(filename: str, frames_to_read: int = 1024,
 def wav_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (wav format)."""
     filenamebytes = _get_filename_bytes(filename)
-    wav = lib.drwav_open_file(filenamebytes)
-    if not wav:
+    wav = ffi.new("drwav*")
+    if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
         raise DecodeError("could not open/decode file")
     try:
         duration = wav.totalPCMFrameCount / wav.sampleRate
@@ -648,13 +648,13 @@ def wav_get_file_info(filename: str) -> SoundFileInfo:
         return SoundFileInfo(filename, FileFormat.WAV, wav.channels, wav.sampleRate,
                              _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
     finally:
-        lib.drwav_close(wav)
+        lib.drwav_uninit(wav)
 
 
 def wav_get_info(data: bytes) -> SoundFileInfo:
     """Fetch some information about the audio data (wav format)."""
-    wav = lib.drwav_open_memory(data, len(data))
-    if not wav:
+    wav = ffi.new("drwav*")
+    if not lib.drwav_init_memory(wav, data, len(data), ffi.NULL):
         raise DecodeError("could not open/decode data")
     try:
         duration = wav.totalPCMFrameCount / wav.sampleRate
@@ -663,7 +663,7 @@ def wav_get_info(data: bytes) -> SoundFileInfo:
         return SoundFileInfo("<memory>", FileFormat.WAV, wav.channels, wav.sampleRate,
                              _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
     finally:
-        lib.drwav_close(wav)
+        lib.drwav_uninit(wav)
 
 
 def wav_read_file_s32(filename: str) -> DecodedSoundFile:
@@ -777,8 +777,8 @@ def wav_stream_file(filename: str, frames_to_read: int = 1024,
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    wav = lib.drwav_open_file(filenamebytes)
-    if not wav:
+    wav = ffi.new("drwav*")
+    if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
         raise DecodeError("could not open/decode file")
     if seek_frame > 0:
         result = lib.drwav_seek_to_pcm_frame(wav, seek_frame)
@@ -796,7 +796,7 @@ def wav_stream_file(filename: str, frames_to_read: int = 1024,
             samples.frombytes(buffer)
             yield samples
     finally:
-        lib.drwav_close(wav)
+        lib.drwav_uninit(wav)
 
 
 def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
@@ -809,13 +809,13 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     fmt.bitsPerSample = sound.sample_width * 8
     # what about floating point format?
     filename_bytes = filename.encode(sys.getfilesystemencoding())
-    pwav = lib.drwav_open_file_write_sequential(filename_bytes, fmt, sound.num_frames * sound.nchannels)
-    if pwav == ffi.NULL:
+    pwav = ffi.new("drwav*")
+    if not lib.drwav_init_file_write_sequential(pwav, filename_bytes, fmt, sound.num_frames * sound.nchannels, ffi.NULL):
         raise IOError("can't open file for writing")
     try:
         lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
     finally:
-        lib.drwav_close(pwav)
+        lib.drwav_uninit(pwav)
 
 
 def _create_int_array(itemsize: int) -> array.array:
@@ -1483,13 +1483,14 @@ class WavFileReadStream(io.RawIOBase):
         fmt.bitsPerSample = self.sample_width * 8
         data = ffi.new("void**")
         datasize = ffi.new("size_t *")
+        pwav = ffi.new("drwav*")
         if max_frames > 0:
-            pwav = lib.drwav_open_memory_write_sequential(data, datasize, fmt, max_frames * nchannels)
+            lib.drwav_init_memory_write_sequential(pwav, data, datasize, fmt, max_frames * nchannels, ffi.NULL)
         else:
-            pwav = lib.drwav_open_memory_write(data, datasize, fmt)
-        lib.drwav_close(pwav)
+            lib.drwav_init_memory_write(pwav, data, datasize, fmt, ffi.NULL)
+        lib.drwav_uninit(pwav)
         self.buffered = bytes(ffi.buffer(data[0], datasize[0]))
-        lib.drflac_free(data[0], ffi.NULL)
+        lib.drwav_free(data[0], ffi.NULL)
 
     def read(self, amount: int = sys.maxsize) -> Optional[bytes]:
         """Read up to the given amount of bytes from the file."""
