@@ -4,7 +4,8 @@ all:
 	@echo "Targets:  test, docs, dist, win_wheels, linux_wheel, check_upload, upload"
 
 test:
-	python setup.py build
+	rm -f *.so
+	python setup.py build test
 	python -m pytest tests
 
 docs:
@@ -25,7 +26,7 @@ linux_wheel: dist
 	python setup.py bdist_wheel
 
 dist: test
-	rm -f dist/*
+	rm -f dist/* *.so
 	python setup.py clean --all
 	python setup.py sdist
 
