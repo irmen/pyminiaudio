@@ -2,7 +2,7 @@
 Pipfile
 NOTES.md
 # FFI Builds
-*.so
+*.[s]o
 
 # Virtual enviroment
 /.venv/

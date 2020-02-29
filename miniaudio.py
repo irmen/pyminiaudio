@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.10"
+__version__ = "1.11.dev0"
 
 
 import abc
@@ -1121,11 +1121,14 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
 
 _callback_decoder_sources = {}     # type: Dict[int, StreamableSource]
 
-# this lowlevel callback function is used in stream_any to provide encoded input audio data.
-# There is some trickery going on with the userdata that contains an id into the dictionary
-# to link back to the Python object that the callback belongs to.
+
 @ffi.def_extern()
 def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int) -> int:
+    """
+    this lowlevel callback function is used in stream_any to provide encoded input audio data.
+    There is some trickery going on with the userdata that contains an id into the dictionary
+    to link back to the Python object that the callback belongs to.
+    """
     if num_bytes <= 0 or not decoder.pUserData:
         return 0
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", decoder.pUserData), struct.calcsize('q')))[0]
@@ -1175,12 +1178,15 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
 
 _callback_data = {}     # type: Dict[int, Union[PlaybackDevice, CaptureDevice, DuplexStream]]
 
-# this lowlevel callback function is used in the Plaback/Capture/Duplex devices,
-# to process the data that is flowing. There is some trickery going on with the
-# userdata that contains an id into the dictionary to link back to the Python object
-# that the callback originates from
+
 @ffi.def_extern()
 def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
+    """
+    this lowlevel callback function is used in the Plaback/Capture/Duplex devices,
+    to process the data that is flowing. There is some trickery going on with the
+    userdata that contains an id into the dictionary to link back to the Python object
+    that the callback originates from
+    """
     if framecount <= 0 or not device.pUserData:
         return
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
@@ -1516,13 +1522,16 @@ class WavFileReadStream(io.RawIOBase):
 
 _callback_converter = {}      # type: Dict[int, StreamingConverter]
 
-# this lowlevel callback function is used in the StreamingConverter streaming audio conversion
-# to produce input PCM audio frames. There is some trickery going on with the
-# userdata that contains an id into the dictionary to link back to the Python object
-# that the callback originates from.
+
 @ffi.def_extern()
 def _internal_pcmconverter_read_callback(converter: ffi.CData, frames: ffi.CData,
                                          framecount: int, userdata: ffi.CData) -> int:
+    """
+    this lowlevel callback function is used in the StreamingConverter streaming audio conversion
+    to produce input PCM audio frames. There is some trickery going on with the
+    userdata that contains an id into the dictionary to link back to the Python object
+    that the callback originates from.
+    """
     if framecount <= 0 or not userdata:
         return framecount
     userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", userdata), struct.calcsize('q')))[0]

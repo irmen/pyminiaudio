@@ -32,7 +32,7 @@ def test_stop_callback_capture(backends, jackd_server):
             raise
         else:
             print("SKIPPING CAPTURE DEVICE INIT ERROR", me)
-    else:        
+    else:
         gen = dummy_generator()
         next(gen)
         capture.start(gen, stop_callback)
