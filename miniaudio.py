@@ -1520,23 +1520,13 @@ class WavFileReadStream(io.RawIOBase):
         pass
 
 
-_callback_converter = {}      # type: Dict[int, StreamingConverter]
-
-
 @ffi.def_extern()
-def _internal_pcmconverter_read_callback(converter: ffi.CData, frames: ffi.CData,
+def _internal_pcmconverter_read_callback(ma_converter: ffi.CData, frames: ffi.CData,
                                          framecount: int, userdata: ffi.CData) -> int:
-    """
-    this lowlevel callback function is used in the StreamingConverter streaming audio conversion
-    to produce input PCM audio frames. There is some trickery going on with the
-    userdata that contains an id into the dictionary to link back to the Python object
-    that the callback originates from.
-    """
     if framecount <= 0 or not userdata:
         return framecount
-    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", userdata), struct.calcsize('q')))[0]
-    callback_converter = _callback_converter[userdata_id]
-    return callback_converter._read_callback(converter, frames, framecount)
+    py_converter = ffi.from_handle(userdata)
+    return py_converter._read_callback(ma_converter, frames, framecount)
 
 
 class StreamingConverter:
@@ -1548,11 +1538,10 @@ class StreamingConverter:
         if not inspect.isgenerator(frame_producer):
             raise TypeError("producer must be a generator", type(frame_producer))
         self.frame_producer = frame_producer        # type: Optional[PlaybackCallbackGeneratorType]
-        _callback_converter[id(self)] = self
-        self._userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
+        self._ffi_handle = ffi.new_handle(self)
         self._conv_config = lib.ma_pcm_converter_config_init(
             in_format.value, in_channels, in_samplerate, out_format.value, out_channels, out_samplerate,
-            lib._internal_pcmconverter_read_callback, self._userdata_ptr)
+            lib._internal_pcmconverter_read_callback, self._ffi_handle)
         self._conv_config.ditherMode = dither.value
         self._converter = ffi.new("ma_pcm_converter*")
         result = lib.ma_pcm_converter_init(ffi.addressof(self._conv_config), self._converter)
@@ -1571,8 +1560,7 @@ class StreamingConverter:
         self.close()
 
     def close(self) -> None:
-        if id(self) in _callback_converter:
-            del _callback_converter[id(self)]
+        pass
 
     def read(self, num_frames: int) -> array.array:
         """Read a chunk of frames from the source and return the given number of converted frames."""
