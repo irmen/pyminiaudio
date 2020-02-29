@@ -32,8 +32,6 @@ class FileSource(miniaudio.StreamableSource):
 print("Audio file playing in the background. Press enter to stop playback. ")
 source = FileSource("music.ogg")
 stream = miniaudio.stream_any(source)
-device = miniaudio.PlaybackDevice()
-device.start(stream)
-
-input()
-device.close()
+with miniaudio.PlaybackDevice() as device:
+    device.start(stream)
+    input()

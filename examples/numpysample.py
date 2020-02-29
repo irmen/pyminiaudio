@@ -21,14 +21,13 @@ def memory_stream(npa: numpy.ndarray) -> miniaudio.PlaybackCallbackGeneratorType
         frames = frames_end
 
 
-device = miniaudio.PlaybackDevice()
-decoded = miniaudio.decode_file(samples_path("music.wav"))
+with miniaudio.PlaybackDevice() as device:
+    decoded = miniaudio.decode_file(samples_path("music.wav"))
 
-# convert the sample data into a numpy array with shape (numframes, numchannels):
-npa = numpy.array(decoded.samples, dtype=numpy.int16).reshape((-1, decoded.nchannels))
+    # convert the sample data into a numpy array with shape (numframes, numchannels):
+    npa = numpy.array(decoded.samples, dtype=numpy.int16).reshape((-1, decoded.nchannels))
 
-stream = memory_stream(npa)
-next(stream)  # start the generator
-device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
-device.close()
+    stream = memory_stream(npa)
+    next(stream)  # start the generator
+    device.start(stream)
+    input("Audio file playing in the background. Enter to stop playback: ")

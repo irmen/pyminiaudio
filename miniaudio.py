@@ -13,7 +13,6 @@ import sys
 import os
 import io
 import array
-import struct
 import inspect
 from enum import Enum
 from typing import Generator, List, Dict, Optional, Union, Any, Callable
@@ -416,7 +415,8 @@ def flac_read_s32(data: bytes) -> DecodedSoundFile:
     channels = ffi.new("unsigned int *")
     sample_rate = ffi.new("unsigned int *")
     num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_s32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+    memory = lib.drflac_open_memory_and_read_pcm_frames_s32(data, len(data),
+                                                            channels, sample_rate, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode data")
     try:
@@ -433,7 +433,8 @@ def flac_read_s16(data: bytes) -> DecodedSoundFile:
     channels = ffi.new("unsigned int *")
     sample_rate = ffi.new("unsigned int *")
     num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_s16(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+    memory = lib.drflac_open_memory_and_read_pcm_frames_s16(data, len(data),
+                                                            channels, sample_rate, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode data")
     try:
@@ -450,7 +451,8 @@ def flac_read_f32(data: bytes) -> DecodedSoundFile:
     channels = ffi.new("unsigned int *")
     sample_rate = ffi.new("unsigned int *")
     num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_f32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+    memory = lib.drflac_open_memory_and_read_pcm_frames_f32(data, len(data),
+                                                            channels, sample_rate, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode data")
     try:
@@ -810,7 +812,8 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     # what about floating point format?
     filename_bytes = filename.encode(sys.getfilesystemencoding())
     pwav = ffi.new("drwav*")
-    if not lib.drwav_init_file_write_sequential(pwav, filename_bytes, fmt, sound.num_frames * sound.nchannels, ffi.NULL):
+    if not lib.drwav_init_file_write_sequential(pwav, filename_bytes,
+                                                fmt, sound.num_frames * sound.nchannels, ffi.NULL):
         raise IOError("can't open file for writing")
     try:
         lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
@@ -1064,7 +1067,7 @@ def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED
 
 class StreamableSource(abc.ABC):
     """Represents a source of data bytes."""
-    userdata_ptr = ffi.NULL         # is set later
+    ffi_handle = ffi.NULL       # can be set later
 
     @abc.abstractmethod
     def read(self, num_bytes: int) -> Union[bytes, memoryview]:
@@ -1081,7 +1084,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
                sample_rate: int = 44100, frames_to_read: int = 1024,
                dither: DitherMode = DitherMode.NONE, seek_frame: int = 0) -> Generator[array.array, int, None]:
     """
-    Convenience generator function to decode and stream any source of encoded audio data
+    Convenience function that returns a generator to decode and stream any source of encoded audio data
     (such as a network stream). Stream result is chunks of raw PCM samples in the chosen format.
     If you send() a number into the generator rather than just using next() on it,
     you'll get that given number of frames, instead of the default configured amount.
@@ -1091,8 +1094,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
     decoder = ffi.new("ma_decoder *")
     decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     decoder_config.ditherMode = dither.value
-    _callback_decoder_sources[id(source)] = source
-    source.userdata_ptr = ffi.new("char[]", struct.pack('q', id(source)))
+    source.ffi_handle = ffi.new_handle(source)
     decoder_init = {
         FileFormat.UNKNOWN: lib.ma_decoder_init,
         FileFormat.VORBIS: lib.ma_decoder_init_vorbis,
@@ -1101,7 +1103,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
         FileFormat.MP3: lib.ma_decoder_init_mp3
     }[source_format]
     result = decoder_init(lib._internal_decoder_read_callback, lib._internal_decoder_seek_callback,
-                          source.userdata_ptr, ffi.addressof(decoder_config), decoder)
+                          source.ffi_handle, ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to init decoder", result)
     if seek_frame > 0:
@@ -1110,8 +1112,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
             raise DecodeError("failed to seek to frame", result)
 
     def on_close() -> None:
-        if id(source) in _callback_decoder_sources:
-            del _callback_decoder_sources[id(source)]
+        pass
 
     g = _samples_stream_generator(frames_to_read, nchannels, output_format, decoder, None, on_close)
     dummy = next(g)
@@ -1119,20 +1120,11 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
     return g
 
 
-_callback_decoder_sources = {}     # type: Dict[int, StreamableSource]
-
-
 @ffi.def_extern()
 def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int) -> int:
-    """
-    this lowlevel callback function is used in stream_any to provide encoded input audio data.
-    There is some trickery going on with the userdata that contains an id into the dictionary
-    to link back to the Python object that the callback belongs to.
-    """
     if num_bytes <= 0 or not decoder.pUserData:
         return 0
-    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", decoder.pUserData), struct.calcsize('q')))[0]
-    source = _callback_decoder_sources[userdata_id]
+    source = ffi.from_handle(decoder.pUserData)
     data = source.read(num_bytes)
     ffi.memmove(output, data, len(data))
     return len(data)
@@ -1144,8 +1136,7 @@ def _internal_decoder_seek_callback(decoder: ffi.CData, offset: int, seek_origin
         return False
     if offset == 0 and seek_origin == lib.ma_seek_origin_current:
         return True
-    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", decoder.pUserData), struct.calcsize('q')))[0]
-    source = _callback_decoder_sources[userdata_id]
+    source = ffi.from_handle(decoder.pUserData)
     return int(source.seek(offset, SeekOrigin(seek_origin)))
 
 
@@ -1176,21 +1167,11 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
     return buffer
 
 
-_callback_data = {}     # type: Dict[int, Union[PlaybackDevice, CaptureDevice, DuplexStream]]
-
-
 @ffi.def_extern()
 def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
-    """
-    this lowlevel callback function is used in the Plaback/Capture/Duplex devices,
-    to process the data that is flowing. There is some trickery going on with the
-    userdata that contains an id into the dictionary to link back to the Python object
-    that the callback originates from
-    """
     if framecount <= 0 or not device.pUserData:
         return
-    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
-    callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
+    callback_device = ffi.from_handle(device.pUserData)
     callback_device._data_callback(device, output, input, framecount)
 
 
@@ -1198,8 +1179,7 @@ def _internal_data_callback(device: ffi.CData, output: ffi.CData, input: ffi.CDa
 def _internal_stop_callback(device: ffi.CData) -> None:
     if not device.pUserData:
         return
-    userdata_id = struct.unpack('q', ffi.unpack(ffi.cast("char *", device.pUserData), struct.calcsize('q')))[0]
-    callback_device = _callback_data[userdata_id]  # type: Union[PlaybackDevice, CaptureDevice, DuplexStream]
+    callback_device = ffi.from_handle(device.pUserData)
     callback_device._stop_callback(device)
 
 
@@ -1210,6 +1190,12 @@ class AbstractDevice:
         self._device = ffi.new("ma_device *")
 
     def __del__(self) -> None:
+        self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
     def start(self, callback_generator: GeneratorTypes, stop_callback: Union[Callable, None] = None) -> None:
@@ -1242,8 +1228,6 @@ class AbstractDevice:
         if self._device is not None:
             lib.ma_device_uninit(self._device)
             self._device = None
-        if _callback_data and id(self) in _callback_data:
-            del _callback_data[id(self)]
 
     def _stop_callback(self, device: ffi.CData) -> None:
         """Stop callback is trigger when unexpectedly stopped (i.e. device disconnect)"""
@@ -1288,15 +1272,14 @@ class CaptureDevice(AbstractDevice):
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        _callback_data[id(self)] = self
-        self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
+        self._ffi_handle = ffi.new_handle(self)
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_capture)
         self._devconfig.sampleRate = self.sample_rate
         self._devconfig.capture.channels = self.nchannels
         self._devconfig.capture.format = self.format.value
         self._devconfig.capture.pDeviceID = device_id or ffi.NULL
         self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
-        self._devconfig.pUserData = self.userdata_ptr
+        self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
         self._devconfig.periods = callback_periods
@@ -1343,15 +1326,14 @@ class PlaybackDevice(AbstractDevice):
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        _callback_data[id(self)] = self
-        self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
+        self._ffi_handle = ffi.new_handle(self)
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_playback)
         self._devconfig.sampleRate = self.sample_rate
         self._devconfig.playback.channels = self.nchannels
         self._devconfig.playback.format = self.format.value
         self._devconfig.playback.pDeviceID = device_id or ffi.NULL
         self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
-        self._devconfig.pUserData = self.userdata_ptr
+        self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
         self._devconfig.periods = callback_periods
@@ -1407,8 +1389,7 @@ class DuplexStream(AbstractDevice):
         self.playback_channels = playback_channels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
-        _callback_data[id(self)] = self
-        self.userdata_ptr = ffi.new("char[]", struct.pack('q', id(self)))
+        self._ffi_handle = ffi.new_handle(self)
         self._devconfig = lib.ma_device_config_init(lib.ma_device_type_duplex)
         self._devconfig.sampleRate = self.sample_rate
         self._devconfig.playback.channels = self.playback_channels
@@ -1418,7 +1399,7 @@ class DuplexStream(AbstractDevice):
         self._devconfig.capture.format = self.capture_format.value
         self._devconfig.capture.pDeviceID = capture_device_id or ffi.NULL
         self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
-        self._devconfig.pUserData = self.userdata_ptr
+        self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
         self._devconfig.periods = callback_periods

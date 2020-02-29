@@ -37,11 +37,11 @@ def stream_file(info, filename):
 
     stream = progress_stream_wrapper(filestream)
     next(stream)   # start the generator
-    device = miniaudio.PlaybackDevice(output_format=output_format, sample_rate=info.sample_rate)
-    print("playback device backend:", device.backend, device.format.name, device.sample_rate, "hz")
-    device.start(stream)
-    input("Audio file playing in the background. Enter to stop playback: ")
-    device.close()
+    with miniaudio.PlaybackDevice(output_format=output_format, sample_rate=info.sample_rate) as device:
+        print("playback device backend:", device.backend, device.format.name, device.sample_rate, "hz")
+        print("Audio file playing in the background. Enter to stop playback: ")
+        device.start(stream)
+        input()
 
 
 if __name__ == "__main__":

@@ -23,6 +23,6 @@ def choose_device():
 if __name__ == "__main__":
     selected_device = choose_device()
     stream = miniaudio.stream_file(samples_path("music.mp3"))
-    device = miniaudio.PlaybackDevice(device_id=selected_device["id"])
-    device.start(stream)
-    input("Audio file playing in the background. Enter to stop playback: ")
+    with miniaudio.PlaybackDevice(device_id=selected_device["id"]) as device:
+        device.start(stream)
+        input("Audio file playing in the background. Enter to stop playback: ")

@@ -11,7 +11,6 @@ def samples_path(filename):
 
 
 stream = miniaudio.stream_file(samples_path("music.mp3"), dither=miniaudio.DitherMode.TRIANGLE)
-device = miniaudio.PlaybackDevice()
-device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
-device.close()
+with miniaudio.PlaybackDevice() as device:
+    device.start(stream)
+    input("Audio file playing in the background. Enter to stop playback: ")
