@@ -1222,7 +1222,10 @@ class AbstractDevice:
                 raise MiniaudioError("failed to stop audio device", result)
 
     def close(self) -> None:
-        """Halt playback or capture and close down the device."""
+        """
+        Halt playback or capture and close down the device.
+        If you use the device as a context manager, it will be closed automatically.
+        """
         self.running = False
         self.callback_generator = None
         if self._device is not None:

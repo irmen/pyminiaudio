@@ -14,7 +14,7 @@ This module provides:
 - its decoders for wav, flac, vorbis and mp3
 - python bindings for most of the functions offered in those libraries:
   - reading and decoding audio files
-  - getting audio file properties (such as duration, number of channels, sample rate) 
+  - getting audio file properties (such as duration, number of channels, sample rate)
   - converting sample formats
   - streaming large audio files
   - audio playback
@@ -27,23 +27,23 @@ Some of the main aspects of this are:
  - generators for the Audio playback, recording and conversion streaming
  - sample data is usually in the form of a Python ``array`` with appropriately sized elements
    depending on the sample width (rather than a raw block of bytes)
- 
 
-*Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).* 
+
+*Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).*
 
 The library is primarily distributed in source form so you need a C compiler to build and install this
 (note: the setup script takes care of the actual compilation process, no need to worry about compiling things yourself).
 For Linux and Mac this shouldn't be a problem. For Windows users, if the correct binary install
-is not available on pypi, you'll have to get it to compile as well which may be a bit of a hassle 
+is not available on pypi, you'll have to get it to compile as well which may be a bit of a hassle
 on this platform. You have to make sure that the required tools that allow you to compile Python extension modules
 are installed (Visual Studio or the VC++ build tools).
- 
+
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
 ## Synthesizer, modplayer?
 
 If you like this library you may also be interested in my [software FM synthesizer](https://pypi.org/project/synthplayer/)
-or my [mod player](https://pypi.org/project/libxmplite/) which uses libxmp. 
+or my [mod player](https://pypi.org/project/libxmplite/) which uses libxmp.
 
 
 ## Examples
@@ -53,10 +53,9 @@ or my [mod player](https://pypi.org/project/libxmplite/) which uses libxmp.
 ```python
 import miniaudio
 stream = miniaudio.stream_file("samples/music.mp3")
-device = miniaudio.PlaybackDevice()
-device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
-device.close()
+with miniaudio.PlaybackDevice() as device:
+    device.start(stream)
+    input("Audio file playing in the background. Enter to stop playback: ")
 ```
 
 ### Playback of an unsupported file format
@@ -83,19 +82,18 @@ def stream_pcm(source):
         print(".", end="", flush=True)
         required_frames = yield sample_data
 
-device = miniaudio.PlaybackDevice(ma_output_format=miniaudio.ma_format_s16,
-                                  nchannels=channels, sample_rate=sample_rate)
-ffmpeg = subprocess.Popen(["ffmpeg", "-v", "fatal", "-hide_banner", "-nostdin",
-                           "-i", filename, "-f", "s16le", "-acodec", "pcm_s16le",
-                           "-ac", str(channels), "-ar", str(sample_rate), "-"],
-                          stdin=None, stdout=subprocess.PIPE)
-stream = stream_pcm(ffmpeg.stdout)
-next(stream)  # start the generator
-device.start(stream)
-input("Audio file playing in the background. Enter to stop playback: ")
-device.close()
-ffmpeg.terminate()
-``` 
+with miniaudio.PlaybackDevice(ma_output_format=miniaudio.ma_format_s16,
+                              nchannels=channels, sample_rate=sample_rate) as device:
+    ffmpeg = subprocess.Popen(["ffmpeg", "-v", "fatal", "-hide_banner", "-nostdin",
+                               "-i", filename, "-f", "s16le", "-acodec", "pcm_s16le",
+                               "-ac", str(channels), "-ar", str(sample_rate), "-"],
+                              stdin=None, stdout=subprocess.PIPE)
+    stream = stream_pcm(ffmpeg.stdout)
+    next(stream)  # start the generator
+    device.start(stream)
+    input("Audio file playing in the background. Enter to stop playback: ")
+    ffmpeg.terminate()
+```
 
 ## API
 
@@ -237,11 +235,11 @@ always a 16 bit sample format.
 
 
 *function*  ``stream_any  (source: miniaudio.StreamableSource, source_format: miniaudio.FileFormat = <FileFormat.UNKNOWN: 0>, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>, seek_frame: int = 0) -> Generator[array.array, int, NoneType]``
-> Convenience generator function to decode and stream any source of encoded audio data (such as a
-network stream). Stream result is chunks of raw PCM samples in the chosen format. If you send() a
-number into the generator rather than just using next() on it, you'll get that given number of
-frames, instead of the default configured amount. This is particularly useful to plug this stream
-into an audio device callback that wants a variable number of frames per call.
+> Convenience function that returns a generator to decode and stream any source of encoded audio
+data (such as a network stream). Stream result is chunks of raw PCM samples in the chosen format. If
+you send() a number into the generator rather than just using next() on it, you'll get that given
+number of frames, instead of the default configured amount. This is particularly useful to plug this
+stream into an audio device callback that wants a variable number of frames per call.
 
 
 *function*  ``stream_file  (filename: str, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, frames_to_read: int = 1024, dither: miniaudio.DitherMode = <DitherMode.NONE: 0>, seek_frame: int = 0) -> Generator[array.array, int, NoneType]``
@@ -330,7 +328,8 @@ stream_file() instead.
 > An audio device provided by miniaudio, for audio capture (recording).
 
 > *method*  ``close  (self) ``
-> > Halt playback or capture and close down the device.
+> > Halt playback or capture and close down the device. If you use the device as a context manager,
+it will be closed automatically.
 
 > *method*  ``start  (self, callback_generator: Generator[NoneType, Union[bytes, array.array], NoneType], stop_callback: Union[Callable, NoneType] = None) ``
 > > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
@@ -370,7 +369,8 @@ callback generator as raw bytes. (it should already be started before)
 > Joins a capture device and a playback device.
 
 > *method*  ``close  (self) ``
-> > Halt playback or capture and close down the device.
+> > Halt playback or capture and close down the device. If you use the device as a context manager,
+it will be closed automatically.
 
 > *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], Union[bytes, array.array], NoneType], stop_callback: Union[Callable, NoneType] = None) ``
 > > Start the audio device: playback and capture begin. The audio data for playback is provided by
@@ -393,7 +393,8 @@ already be started before passing it in)
 > An audio device provided by miniaudio, for audio playback.
 
 > *method*  ``close  (self) ``
-> > Halt playback or capture and close down the device.
+> > Halt playback or capture and close down the device. If you use the device as a context manager,
+it will be closed automatically.
 
 > *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], int, NoneType], stop_callback: Union[Callable, NoneType] = None) ``
 > > Start the audio device: playback begins. The audio data is provided by the given callback
