@@ -23,6 +23,7 @@ __pycache__/
 .eggs/
 .pytest_cache/
 .idea/
+.tox/
 build
 dist
 *.egg-info/
