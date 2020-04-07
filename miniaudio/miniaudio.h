@@ -1,6 +1,6 @@
 /*
 Audio playback and capture library. Choice of public domain or MIT-0. See license statements at the end of this file.
-miniaudio - v0.10.2 - 2020-03-22
+miniaudio - v0.10.3 - 2020-04-07
 
 David Reid - davidreidsoftware@gmail.com
 
@@ -9,8 +9,8 @@ GitHub:  https://github.com/dr-soft/miniaudio
 */
 
 /*
-RELEASE NOTES - VERSION 0.10
-============================
+RELEASE NOTES - VERSION 0.10.x
+==============================
 Version 0.10 includes major API changes and refactoring, mostly concerned with the data conversion system. Data conversion is performed internally to convert
 audio data between the format requested when initializing the `ma_device` object and the format of the internal device used by the backend. The same applies
 to the `ma_decoder` object. The previous design has several design flaws and missing features which necessitated a complete redesign.
@@ -160,6 +160,9 @@ object. Then use `ma_noise_read_pcm_frames()` to read PCM data.
 
 Miscellaneous Changes
 ---------------------
+The MA_NO_STDIO option has been removed. This would disable file I/O APIs, however this has proven to be too hard to maintain for it's perceived value and was
+therefore removed.
+
 Internal functions have all been made static where possible. If you get warnings about unused functions, please submit a bug report.
 
 The `ma_device` structure is no longer defined as being aligned to MA_SIMD_ALIGNMENT. This resulted in a possible crash when allocating a `ma_device` object on
@@ -170,6 +173,15 @@ this has been removed from all structures.
 Results codes have been overhauled. Unnecessary result codes have been removed, and some have been renumbered for organisation purposes. If you are are binding
 maintainer you will need to update your result codes. Support has also been added for retrieving a human readable description of a given result code via the
 `ma_result_description()` API.
+
+ALSA: The automatic format conversion, channel conversion and resampling performed by ALSA is now disabled by default as they were causing some compatibility
+issues with certain devices and configurations. These can be individually enabled via the device config:
+
+    ```c
+    deviceConfig.alsa.noAutoFormat   = MA_TRUE;
+    deviceConfig.alsa.noAutoChannels = MA_TRUE;
+    deviceConfig.alsa.noAutoResample = MA_TRUE;
+    ```
 */
 
 
@@ -461,10 +473,7 @@ Build Options
 
 #define MA_NO_DEVICE_IO
   Disables playback and recording. This will disable ma_context and ma_device APIs. This is useful if you only want to use miniaudio's data conversion and/or
-  decoding APIs. 
-
-#define MA_NO_STDIO
-  Disables file IO APIs.
+  decoding APIs.
 
 #define MA_NO_SSE2
   Disables SSE2 optimizations.
@@ -644,7 +653,7 @@ The table below are the supported encoding backends:
 The code below is an example of how to enable encoding backends:
 
     ```c
-    #include "dr_wav.h"     // Enables WAV decoding.
+    #include "dr_wav.h"     // Enables WAV encoding.
 
     #define MINIAUDIO_IMPLEMENTATION
     #include "miniaudio.h"
@@ -1090,7 +1099,7 @@ Low-pass filtering is achieved with the following APIs:
 
 Low-pass filter example:
 
-     ```c
+    ```c
     ma_lpf_config config = ma_lpf_config_init(ma_format_f32, channels, sampleRate, cutoffFrequency, order);
     ma_result result = ma_lpf_init(&config, &lpf);
     if (result != MA_SUCCESS) {
@@ -3179,7 +3188,10 @@ typedef struct
     } wasapi;
     struct
     {
-        ma_bool32 noMMap;  /* Disables MMap mode. */
+        ma_bool32 noMMap;           /* Disables MMap mode. */
+        ma_bool32 noAutoFormat;     /* Opens the ALSA device with SND_PCM_NO_AUTO_FORMAT. */
+        ma_bool32 noAutoChannels;   /* Opens the ALSA device with SND_PCM_NO_AUTO_CHANNELS. */
+        ma_bool32 noAutoResample;   /* Opens the ALSA device with SND_PCM_NO_AUTO_RESAMPLE. */
     } alsa;
     struct
     {
@@ -3732,7 +3744,6 @@ struct ma_device
             /*HANDLE*/ ma_handle hEventPlayback;
             /*HANDLE*/ ma_handle hEventCapture;
             ma_uint32 fragmentSizeInFrames;
-            ma_uint32 fragmentSizeInBytes;
             ma_uint32 iNextHeaderPlayback;             /* [0,periods). Used as an index into pWAVEHDRPlayback. */
             ma_uint32 iNextHeaderCapture;              /* [0,periods). Used as an index into pWAVEHDRCapture. */
             ma_uint32 headerFramesConsumedPlayback;    /* The number of PCM frames consumed in the buffer in pWAVEHEADER[iNextHeader]. */
@@ -3994,7 +4005,7 @@ can then be set directly on the structure. Below are the members of the `ma_cont
         callbacks will be used for anything tied to the context, including devices.
 
     alsa.useVerboseDeviceEnumeration
-        ALSA will typically enumerate many different devices which can be intrusive and unuser-friendly. To combat this, miniaudio will enumerate only unique
+        ALSA will typically enumerate many different devices which can be intrusive and not user-friendly. To combat this, miniaudio will enumerate only unique
         card/device pairs by default. The problem with this is that you lose a bit of flexibility and control. Setting alsa.useVerboseDeviceEnumeration makes
         it so the ALSA backend includes all devices. Defaults to false.
 
@@ -4394,13 +4405,12 @@ from a microphone. Whether or not you should send or receive data from the devic
 playback, capture, full-duplex or loopback. (Note that loopback mode is only supported on select backends.) Sending and receiving audio data to and from the
 device is done via a callback which is fired by miniaudio at periodic time intervals.
 
-The frequency at which data is deilvered to and from a device depends on the size of it's period which is defined by a buffer size and a period count. The size
-of the buffer can be defined in terms of PCM frames or milliseconds, whichever is more convenient. The size of a period is the size of this buffer, divided by
-the period count. Generally speaking, the smaller the period, the lower the latency at the expense of higher CPU usage and increased risk of glitching due to
-the more frequent and granular data deliver intervals. The size of a period will depend on your requirements, but miniaudio's defaults should work fine for
-most scenarios. If you're building a game you should leave this fairly small, whereas if you're building a simple media player you can make it larger. Note
-that the period size you request is actually just a hint - miniaudio will tell the backend what you want, but the backend is ultimately responsible for what it
-gives you. You cannot assume you will get exactly what you ask for.
+The frequency at which data is delivered to and from a device depends on the size of it's period. The size of the period can be defined in terms of PCM frames
+or milliseconds, whichever is more convenient. Generally speaking, the smaller the period, the lower the latency at the expense of higher CPU usage and
+increased risk of glitching due to the more frequent and granular data deliver intervals. The size of a period will depend on your requirements, but
+miniaudio's defaults should work fine for most scenarios. If you're building a game you should leave this fairly small, whereas if you're building a simple
+media player you can make it larger. Note that the period size you request is actually just a hint - miniaudio will tell the backend what you want, but the
+backend is ultimately responsible for what it gives you. You cannot assume you will get exactly what you ask for.
 
 When delivering data to and from a device you need to make sure it's in the correct format which you can set through the device configuration. You just set the
 format that you want to use and miniaudio will perform all of the necessary conversion for you internally. When delivering data to and from the callback you
@@ -4473,7 +4483,7 @@ then be set directly on the structure. Below are the members of the `ma_device_c
 
     noPreZeroedOutputBuffer
         When set to true, the contents of the output buffer passed into the data callback will be left undefined. When set to false (default), the contents of
-        the output buffer will be cleared the zero. You can use this to avoid the overhead of zeroing out the buffer if you know can guarantee that your data
+        the output buffer will be cleared the zero. You can use this to avoid the overhead of zeroing out the buffer if you can guarantee that your data
         callback will write to every sample in the output buffer, or if you are doing your own clearing.
 
     noClip
@@ -4518,11 +4528,12 @@ then be set directly on the structure. Below are the members of the `ma_device_c
 
     playback.shareMode
         The preferred share mode to use for playback. Can be either `ma_share_mode_shared` (default) or `ma_share_mode_exclusive`. Note that if you specify
-        exclusive mode, but it's not supported by the backend, initialization will fail. You can then fall back to shared mode if desired.
+        exclusive mode, but it's not supported by the backend, initialization will fail. You can then fall back to shared mode if desired by changing this to
+        ma_share_mode_shared and reinitializing.
 
-    playback.pDeviceID
-        A pointer to a `ma_device_id` structure containing the ID of the playback device to initialize. Setting this NULL (default) will use the system's
-        default playback device. Retrieve the device ID from the `ma_device_info` structure, which can be retrieved using device enumeration.
+    capture.pDeviceID
+        A pointer to a `ma_device_id` structure containing the ID of the capture device to initialize. Setting this NULL (default) will use the system's
+        default capture device. Retrieve the device ID from the `ma_device_info` structure, which can be retrieved using device enumeration.
 
     capture.format
         The sample format to use for capture. When set to `ma_format_unknown` the device's native format will be used. This can be retrieved after
@@ -4538,7 +4549,8 @@ then be set directly on the structure. Below are the members of the `ma_device_c
 
     capture.shareMode
         The preferred share mode to use for capture. Can be either `ma_share_mode_shared` (default) or `ma_share_mode_exclusive`. Note that if you specify
-        exclusive mode, but it's not supported by the backend, initialization will fail. You can then fall back to shared mode if desired.
+        exclusive mode, but it's not supported by the backend, initialization will fail. You can then fall back to shared mode if desired by changing this to
+        ma_share_mode_shared and reinitializing.
 
     wasapi.noAutoConvertSRC
         WASAPI only. When set to true, disables WASAPI's automatic resampling and forces the use of miniaudio's resampler. Defaults to false. 
@@ -4556,6 +4568,15 @@ then be set directly on the structure. Below are the members of the `ma_device_c
     alsa.noMMap
         ALSA only. When set to true, disables MMap mode. Defaults to false.
 
+    alsa.noAutoFormat
+        ALSA only. When set to true, disables ALSA's automatic format conversion by including the SND_PCM_NO_AUTO_FORMAT flag. Defaults to false.
+
+    alsa.noAutoChannels
+        ALSA only. When set to true, disables ALSA's automatic channel conversion by including the SND_PCM_NO_AUTO_CHANNELS flag. Defaults to false.
+
+    alsa.noAutoResample
+        ALSA only. When set to true, disables ALSA's automatic resampling by including the SND_PCM_NO_AUTO_RESAMPLE flag. Defaults to false.
+
     pulse.pStreamNamePlayback
         PulseAudio only. Sets the stream name for playback.
 
@@ -4564,6 +4585,8 @@ then be set directly on the structure. Below are the members of the `ma_device_c
 
 
 Once initialized, the device's config is immutable. If you need to change the config you will need to initialize a new device.
+
+After initializing the device it will be in a stopped state. To start it, use `ma_device_start()`.
 
 If both `periodSizeInFrames` and `periodSizeInMilliseconds` are set to zero, it will default to `MA_DEFAULT_PERIOD_SIZE_IN_MILLISECONDS_LOW_LATENCY` or
 `MA_DEFAULT_PERIOD_SIZE_IN_MILLISECONDS_CONSERVATIVE`, depending on whether or not `performanceProfile` is set to `ma_performance_profile_low_latency` or
@@ -4575,11 +4598,9 @@ config) which is the most reliable option. Some backends do not have a practical
 for example) in which case it just acts as a hint. Unless you have special requirements you should try avoiding exclusive mode as it's intrusive to the user.
 Starting with Windows 10, miniaudio will use low-latency shared mode where possible which may make exclusive mode unnecessary.
 
-After initializing the device it will be in a stopped state. To start it, use `ma_device_start()`.
-
-When sending or receiving data to/from a device, miniaudio will internally perform a format conversion to convert between the format specified by pConfig and
-the format used internally by the backend. If you pass in 0 for the sample format, channel count, sample rate _and_ channel map, data transmission will run on
-an optimized pass-through fast path. You can retrieve the format, channel count and sample rate by inspecting the `playback/capture.format`,
+When sending or receiving data to/from a device, miniaudio will internally perform a format conversion to convert between the format specified by the config
+and the format used internally by the backend. If you pass in 0 for the sample format, channel count, sample rate _and_ channel map, data transmission will run
+on an optimized pass-through fast path. You can retrieve the format, channel count and sample rate by inspecting the `playback/capture.format`,
 `playback/capture.channels` and `sampleRate` members of the device object.
 
 When compiling for UWP you must ensure you call this function on the main UI thread because the operating system may need to present the user with a message
@@ -4591,7 +4612,7 @@ If these fail it will try falling back to the "hw" device.
 
 Example 1 - Simple Initialization
 ---------------------------------
-This example shows how to initialize a simple playback default using a standard configuration. If you are just needing to do simple playback from the default
+This example shows how to initialize a simple playback device using a standard configuration. If you are just needing to do simple playback from the default
 playback device this is usually all you need.
 
 ```c
@@ -4612,7 +4633,7 @@ if (result != MA_SUCCESS) {
 
 Example 2 - Advanced Initialization
 -----------------------------------
-This example show how you might do some more advanced initialization. In this hypothetical example we want to control the latency by setting the buffer size
+This example shows how you might do some more advanced initialization. In this hypothetical example we want to control the latency by setting the buffer size
 and period count. We also want to allow the user to be able to choose which device to output from which means we need a context so we can perform device
 enumeration.
 
@@ -5273,7 +5294,6 @@ MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSiz
 MA_API ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_memory_raw(const void* pData, size_t dataSize, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
 
-#ifndef MA_NO_STDIO
 MA_API ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_wav(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_flac(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
@@ -5285,7 +5305,6 @@ MA_API ma_result ma_decoder_init_file_wav_w(const wchar_t* pFilePath, const ma_d
 MA_API ma_result ma_decoder_init_file_flac_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_mp3_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-#endif
 
 MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder);
 
@@ -5323,9 +5342,7 @@ MA_API ma_result ma_decoder_seek_to_pcm_frame(ma_decoder* pDecoder, ma_uint64 fr
 Helper for opening and decoding a file into a heap allocated block of memory. Free the returned pointer with ma_free(). On input,
 pConfig should be set to what you want. On output it will be set to what you got.
 */
-#ifndef MA_NO_STDIO
 MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
-#endif
 MA_API ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
 
 #endif  /* MA_NO_DECODING */
@@ -5373,10 +5390,8 @@ struct ma_encoder
 };
 
 MA_API ma_result ma_encoder_init(ma_encoder_write_proc onWrite, ma_encoder_seek_proc onSeek, void* pUserData, const ma_encoder_config* pConfig, ma_encoder* pEncoder);
-#ifndef MA_NO_STDIO
 MA_API ma_result ma_encoder_init_file(const char* pFilePath, const ma_encoder_config* pConfig, ma_encoder* pEncoder);
 MA_API ma_result ma_encoder_init_file_w(const wchar_t* pFilePath, const ma_encoder_config* pConfig, ma_encoder* pEncoder);
-#endif
 MA_API void ma_encoder_uninit(ma_encoder* pEncoder);
 MA_API ma_uint64 ma_encoder_write_pcm_frames(ma_encoder* pEncoder, const void* pFramesIn, ma_uint64 frameCount);
 
@@ -5489,12 +5504,11 @@ IMPLEMENTATION
 #include <limits.h> /* For INT_MAX */
 #include <math.h>   /* sin(), etc. */
 
-#if !defined(MA_NO_STDIO) || defined(MA_DEBUG_OUTPUT)
-    #include <stdio.h>
-    #if !defined(_MSC_VER) && !defined(__DMC__)
-        #include <strings.h>    /* For strcasecmp(). */
-        #include <wchar.h>      /* For wcslen(), wcsrtombs() */
-    #endif
+#include <stdarg.h>
+#include <stdio.h>
+#if !defined(_MSC_VER) && !defined(__DMC__)
+    #include <strings.h>    /* For strcasecmp(). */
+    #include <wchar.h>      /* For wcslen(), wcsrtombs() */
 #endif
 
 #ifdef MA_WIN32
@@ -6076,7 +6090,7 @@ static MA_INLINE double ma_sqrt(double x)
 
 static MA_INLINE double ma_cos(double x)
 {
-    return ma_sin((MA_PI*0.5) - x);
+    return ma_sin((MA_PI_D*0.5) - x);
 }
 
 static MA_INLINE double ma_log10(double x)
@@ -6840,12 +6854,8 @@ fallback, so if you notice your compiler not detecting this properly I'm happy t
     #endif
 #endif
 
-MA_API ma_result ma_wfopen(FILE** ppFile, const wchar_t* pFilePath, const wchar_t* pOpenMode, ma_allocation_callbacks* pAllocationCallbacks)
+MA_API ma_result ma_wfopen(FILE** ppFile, const wchar_t* pFilePath, const wchar_t* pOpenMode, const ma_allocation_callbacks* pAllocationCallbacks)
 {
-#if _MSC_VER && _MSC_VER >= 1400
-    errno_t err;
-#endif
-
     if (ppFile != NULL) {
         *ppFile = NULL;  /* Safety. */
     }
@@ -6855,11 +6865,10 @@ MA_API ma_result ma_wfopen(FILE** ppFile, const wchar_t* pFilePath, const wchar_
     }
 
 #if defined(MA_HAS_WFOPEN)
-    (void)pAllocationCallbacks;
-
-    /* Use _wfopen() on Windows. */
+    {
+        /* Use _wfopen() on Windows. */
     #if defined(_MSC_VER) && _MSC_VER >= 1400
-        err = _wfopen_s(ppFile, pFilePath, pOpenMode);
+        errno_t err = _wfopen_s(ppFile, pFilePath, pOpenMode);
         if (err != 0) {
             return ma_result_from_errno(err);
         }
@@ -6869,6 +6878,8 @@ MA_API ma_result ma_wfopen(FILE** ppFile, const wchar_t* pFilePath, const wchar_
             return ma_result_from_errno(errno);
         }
     #endif
+        (void)pAllocationCallbacks;
+    }
 #else
     /*
     Use fopen() on anything other than Windows. Requires a conversion. This is annoying because fopen() is locale specific. The only real way I can
@@ -7778,14 +7789,14 @@ static ma_result ma_result_from_HRESULT(HRESULT hr)
 }
 
 typedef HRESULT (WINAPI * MA_PFN_CoInitializeEx)(LPVOID pvReserved, DWORD  dwCoInit);
-typedef void    (WINAPI * MA_PFN_CoUninitialize)();
+typedef void    (WINAPI * MA_PFN_CoUninitialize)(void);
 typedef HRESULT (WINAPI * MA_PFN_CoCreateInstance)(REFCLSID rclsid, LPUNKNOWN pUnkOuter, DWORD dwClsContext, REFIID riid, LPVOID *ppv);
 typedef void    (WINAPI * MA_PFN_CoTaskMemFree)(LPVOID pv);
 typedef HRESULT (WINAPI * MA_PFN_PropVariantClear)(PROPVARIANT *pvar);
 typedef int     (WINAPI * MA_PFN_StringFromGUID2)(const GUID* const rguid, LPOLESTR lpsz, int cchMax);
 
-typedef HWND (WINAPI * MA_PFN_GetForegroundWindow)();
-typedef HWND (WINAPI * MA_PFN_GetDesktopWindow)();
+typedef HWND (WINAPI * MA_PFN_GetForegroundWindow)(void);
+typedef HWND (WINAPI * MA_PFN_GetDesktopWindow)(void);
 
 /* Microsoft documents these APIs as returning LSTATUS, but the Win32 API shipping with some compilers do not define it. It's just a LONG. */
 typedef LONG (WINAPI * MA_PFN_RegOpenKeyExA)(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult);
@@ -7820,6 +7831,12 @@ MA_API const char* ma_log_level_to_string(ma_uint32 logLevel)
 static void ma_post_log_message(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message)
 {
     if (pContext == NULL) {
+        if (pDevice != NULL) {
+            pContext = pDevice->pContext;
+        }
+    }
+
+    if (pContext == NULL) {
         return;
     }
     
@@ -7841,16 +7858,81 @@ static void ma_post_log_message(ma_context* pContext, ma_device* pDevice, ma_uin
 #endif
 }
 
+/* Posts a formatted log message. */
+static void ma_post_log_messagev(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* pFormat, va_list args)
+{
+#if (!defined(_MSC_VER) || _MSC_VER >= 1900) && !defined(__STRICT_ANSI__)
+    {
+        char pFormattedMessage[1024];
+        vsnprintf(pFormattedMessage, sizeof(pFormattedMessage), pFormat, args);
+        ma_post_log_message(pContext, pDevice, logLevel, pFormattedMessage);
+    }
+#else
+    {
+        /*
+        Without snprintf() we need to first measure the string and then heap allocate it. I'm only aware of Visual Studio having support for this without snprintf(), so we'll
+        need to restrict this branch to Visual Studio. For other compilers we need to just not support formatted logging because I don't want the security risk of overflowing
+        a fixed sized stack allocated buffer.
+        */
+#if defined (_MSC_VER)
+        int formattedLen;
+        va_list args2;
+
+    #if _MSC_VER >= 1800
+        va_copy(args2, args);
+    #else
+        args2 = args;
+    #endif
+        formattedLen = _vscprintf(pFormat, args2);
+        va_end(args2);
+
+        if (formattedLen > 0) {
+            char* pFormattedMessage = NULL;
+            ma_allocation_callbacks* pAllocationCallbacks = NULL;
+
+            /* Make sure we have a context so we can allocate memory. */
+            if (pContext == NULL) {
+                if (pDevice != NULL) {
+                    pContext = pDevice->pContext;
+                }
+            }
+
+            if (pContext != NULL) {
+                pAllocationCallbacks = &pContext->allocationCallbacks;
+            }
+
+            pFormattedMessage = (char*)ma_malloc(formattedLen + 1, pAllocationCallbacks);
+            if (pFormattedMessage != NULL) {
+                vsprintf_s(pFormattedMessage, formattedLen + 1, pFormat, args);
+                ma_post_log_message(pContext, pDevice, logLevel, pFormattedMessage);
+                ma_free(pFormattedMessage, pAllocationCallbacks);
+            }
+        }
+#else
+        /* Can't do anything because we don't have a safe way of to emulate vsnprintf() without a manual solution. */
+        (void)pContext;
+        (void)pDevice;
+        (void)logLevel;
+        (void)pFormat;
+        (void)args;
+#endif
+    }
+#endif
+}
+
+static MA_INLINE void ma_post_log_messagef(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* pFormat, ...)
+{
+    va_list args;
+    va_start(args, pFormat);
+    {
+        ma_post_log_messagev(pContext, pDevice, logLevel, pFormat, args);
+    }
+    va_end(args);
+}
+
 /* Posts an log message. Throw a breakpoint in here if you're needing to debug. The return value is always "resultCode". */
 static ma_result ma_context_post_error(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message, ma_result resultCode)
 {
-    /* Derive the context from the device if necessary. */
-    if (pContext == NULL) {
-        if (pDevice != NULL) {
-            pContext = pDevice->pContext;
-        }
-    }
-
     ma_post_log_message(pContext, pDevice, logLevel, message);
     return resultCode;
 }
@@ -12813,17 +12895,69 @@ static ma_result ma_device_main_loop__wasapi(ma_device* pDevice)
                     break;
                 }
 
-                /* We should have a buffer at this point. */
-                ma_device__send_frames_to_client(pDevice, mappedDeviceBufferSizeInFramesCapture, pMappedDeviceBufferCapture);
+                /* Overrun detection. */
+                if ((flagsCapture & MA_AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0) {
+                    /* Glitched. Probably due to an overrun. */
+                #ifdef MA_DEBUG_OUTPUT
+                    printf("[WASAPI] Data discontinuity (possible overrun). framesAvailableCapture=%d, mappedBufferSizeInFramesCapture=%d\n", framesAvailableCapture, mappedDeviceBufferSizeInFramesCapture);
+                #endif
 
-                /* At this point we're done with the buffer. */
-                hr = ma_IAudioCaptureClient_ReleaseBuffer((ma_IAudioCaptureClient*)pDevice->wasapi.pCaptureClient, mappedDeviceBufferSizeInFramesCapture);
-                pMappedDeviceBufferCapture = NULL;    /* <-- Important. Not doing this can result in an error once we leave this loop because it will use this to know whether or not a final ReleaseBuffer() needs to be called. */
-                mappedDeviceBufferSizeInFramesCapture = 0;
-                if (FAILED(hr)) {
-                    ma_post_error(pDevice, MA_LOG_LEVEL_ERROR, "[WASAPI] Failed to release internal buffer from capture device after reading from the device.", ma_result_from_HRESULT(hr));
-                    exitLoop = MA_TRUE;
-                    break;
+                    /*
+                    Exeriment: If we get an overrun it probably means we're straddling the end of the buffer. In order to prevent a never-ending sequence of glitches let's experiment
+                    by dropping every frame until we're left with only a single period. To do this we just keep retrieving and immediately releasing buffers until we're down to the
+                    last period.
+                    */
+                    if (framesAvailableCapture >= pDevice->wasapi.actualPeriodSizeInFramesCapture) {
+                    #ifdef MA_DEBUG_OUTPUT
+                        printf("[WASAPI] Synchronizing capture stream. ");
+                    #endif
+                        do
+                        {
+                            hr = ma_IAudioCaptureClient_ReleaseBuffer((ma_IAudioCaptureClient*)pDevice->wasapi.pCaptureClient, mappedDeviceBufferSizeInFramesCapture);
+                            if (FAILED(hr)) {
+                                break;
+                            }
+
+                            framesAvailableCapture -= mappedDeviceBufferSizeInFramesCapture;
+                                    
+                            if (framesAvailableCapture > 0) {
+                                mappedDeviceBufferSizeInFramesCapture = ma_min(framesAvailableCapture, periodSizeInFramesCapture);
+                                hr = ma_IAudioCaptureClient_GetBuffer((ma_IAudioCaptureClient*)pDevice->wasapi.pCaptureClient, (BYTE**)&pMappedDeviceBufferCapture, &mappedDeviceBufferSizeInFramesCapture, &flagsCapture, NULL, NULL);
+                                if (FAILED(hr)) {
+                                    ma_post_error(pDevice, MA_LOG_LEVEL_ERROR, "[WASAPI] Failed to retrieve internal buffer from capture device in preparation for writing to the device.", ma_result_from_HRESULT(hr));
+                                    exitLoop = MA_TRUE;
+                                    break;
+                                }
+                            } else {
+                                pMappedDeviceBufferCapture = NULL;
+                                mappedDeviceBufferSizeInFramesCapture = 0;
+                            }
+                        } while (framesAvailableCapture > periodSizeInFramesCapture);
+                    #ifdef MA_DEBUG_OUTPUT
+                        printf("framesAvailableCapture=%d, mappedBufferSizeInFramesCapture=%d\n", framesAvailableCapture, mappedDeviceBufferSizeInFramesCapture);
+                    #endif
+                    }
+                } else {
+                #ifdef MA_DEBUG_OUTPUT
+                    if (flagsCapture != 0) {
+                        printf("[WASAPI] Capture Flags: %d\n", flagsCapture);
+                    }
+                #endif
+                }
+
+                /* We should have a buffer at this point, but let's just do a sanity check anyway. */
+                if (mappedDeviceBufferSizeInFramesCapture > 0 && pMappedDeviceBufferCapture != NULL) {
+                    ma_device__send_frames_to_client(pDevice, mappedDeviceBufferSizeInFramesCapture, pMappedDeviceBufferCapture);
+
+                    /* At this point we're done with the buffer. */
+                    hr = ma_IAudioCaptureClient_ReleaseBuffer((ma_IAudioCaptureClient*)pDevice->wasapi.pCaptureClient, mappedDeviceBufferSizeInFramesCapture);
+                    pMappedDeviceBufferCapture = NULL;    /* <-- Important. Not doing this can result in an error once we leave this loop because it will use this to know whether or not a final ReleaseBuffer() needs to be called. */
+                    mappedDeviceBufferSizeInFramesCapture = 0;
+                    if (FAILED(hr)) {
+                        ma_post_error(pDevice, MA_LOG_LEVEL_ERROR, "[WASAPI] Failed to release internal buffer from capture device after reading from the device.", ma_result_from_HRESULT(hr));
+                        exitLoop = MA_TRUE;
+                        break;
+                    }
                 }
             } break;
 
@@ -13013,8 +13147,8 @@ static ma_result ma_context_init__wasapi(const ma_context_config* pConfig, ma_co
 
         MA_ZERO_OBJECT(&osvi);
         osvi.dwOSVersionInfoSize = sizeof(osvi);
-        osvi.dwMajorVersion = HIBYTE(MA_WIN32_WINNT_VISTA);
-        osvi.dwMinorVersion = LOBYTE(MA_WIN32_WINNT_VISTA);
+        osvi.dwMajorVersion = ((MA_WIN32_WINNT_VISTA >> 8) & 0xFF);
+        osvi.dwMinorVersion = ((MA_WIN32_WINNT_VISTA >> 0) & 0xFF);
         osvi.wServicePackMajor = 1;
         if (_VerifyVersionInfoW(&osvi, MA_VER_MAJORVERSION | MA_VER_MINORVERSION | MA_VER_SERVICEPACKMAJOR, _VerSetConditionMask(_VerSetConditionMask(_VerSetConditionMask(0, MA_VER_MAJORVERSION, MA_VER_GREATER_EQUAL), MA_VER_MINORVERSION, MA_VER_GREATER_EQUAL), MA_VER_SERVICEPACKMAJOR, MA_VER_GREATER_EQUAL))) {
             result = MA_SUCCESS;
@@ -16577,11 +16711,10 @@ static ma_bool32 ma_does_id_exist_in_list__alsa(ma_device_id* pUniqueIDs, ma_uin
 }
 
 
-static ma_result ma_context_open_pcm__alsa(ma_context* pContext, ma_share_mode shareMode, ma_device_type deviceType, const ma_device_id* pDeviceID, ma_snd_pcm_t** ppPCM)
+static ma_result ma_context_open_pcm__alsa(ma_context* pContext, ma_share_mode shareMode, ma_device_type deviceType, const ma_device_id* pDeviceID, int openMode, ma_snd_pcm_t** ppPCM)
 {
     ma_snd_pcm_t* pPCM;
     ma_snd_pcm_stream_t stream;
-    int openMode;
 
     MA_ASSERT(pContext != NULL);
     MA_ASSERT(ppPCM != NULL);
@@ -16589,8 +16722,7 @@ static ma_result ma_context_open_pcm__alsa(ma_context* pContext, ma_share_mode s
     *ppPCM = NULL;
     pPCM = NULL;
 
-    stream   = (deviceType == ma_device_type_playback) ? MA_SND_PCM_STREAM_PLAYBACK : MA_SND_PCM_STREAM_CAPTURE;
-    openMode = MA_SND_PCM_NO_AUTO_RESAMPLE | MA_SND_PCM_NO_AUTO_CHANNELS | MA_SND_PCM_NO_AUTO_FORMAT;
+    stream = (deviceType == ma_device_type_playback) ? MA_SND_PCM_STREAM_PLAYBACK : MA_SND_PCM_STREAM_CAPTURE;
 
     if (pDeviceID == NULL) {
         ma_bool32 isDeviceOpen;
@@ -16924,7 +17056,7 @@ static ma_result ma_context_get_device_info__alsa(ma_context* pContext, ma_devic
     }
 
     /* For detailed info we need to open the device. */
-    result = ma_context_open_pcm__alsa(pContext, shareMode, deviceType, pDeviceID, &pPCM);
+    result = ma_context_open_pcm__alsa(pContext, shareMode, deviceType, pDeviceID, 0, &pPCM);
     if (result != MA_SUCCESS) {
         return result;
     }
@@ -17275,6 +17407,7 @@ static ma_result ma_device_init_by_type__alsa(ma_context* pContext, const ma_dev
     ma_channel internalChannelMap[MA_MAX_CHANNELS];
     ma_uint32 internalPeriodSizeInFrames;
     ma_uint32 internalPeriods;
+    int openMode;
     ma_snd_pcm_hw_params_t* pHWParams;
     ma_snd_pcm_sw_params_t* pSWParams;
     ma_snd_pcm_uframes_t bufferBoundary;
@@ -17289,7 +17422,18 @@ static ma_result ma_device_init_by_type__alsa(ma_context* pContext, const ma_dev
     shareMode  = (deviceType == ma_device_type_capture) ? pConfig->capture.shareMode : pConfig->playback.shareMode;
     pDeviceID  = (deviceType == ma_device_type_capture) ? pConfig->capture.pDeviceID : pConfig->playback.pDeviceID;
 
-    result = ma_context_open_pcm__alsa(pContext, shareMode, deviceType, pDeviceID, &pPCM);
+    openMode = 0;
+    if (pConfig->alsa.noAutoResample) {
+        openMode |= MA_SND_PCM_NO_AUTO_RESAMPLE;
+    }
+    if (pConfig->alsa.noAutoChannels) {
+        openMode |= MA_SND_PCM_NO_AUTO_CHANNELS;
+    }
+    if (pConfig->alsa.noAutoFormat) {
+        openMode |= MA_SND_PCM_NO_AUTO_FORMAT;
+    }
+
+    result = ma_context_open_pcm__alsa(pContext, shareMode, deviceType, pDeviceID, openMode, &pPCM);
     if (result != MA_SUCCESS) {
         return result;
     }
@@ -30735,7 +30879,7 @@ Low-Pass Filter
 **************************************************************************************************************************************************************/
 MA_API ma_lpf1_config ma_lpf1_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, double cutoffFrequency)
 {
-    ma_lpf2_config config;
+    ma_lpf1_config config;
     
     MA_ZERO_OBJECT(&config);
     config.format = format;
@@ -30749,7 +30893,7 @@ MA_API ma_lpf1_config ma_lpf1_config_init(ma_format format, ma_uint32 channels, 
 
 MA_API ma_lpf2_config ma_lpf2_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, double cutoffFrequency, double q)
 {
-    ma_lpf1_config config;
+    ma_lpf2_config config;
     
     MA_ZERO_OBJECT(&config);
     config.format = format;
@@ -34420,14 +34564,6 @@ MA_API ma_result ma_data_converter_init(const ma_data_converter_config* pConfig,
         midFormat = ma_format_f32;
     }
 
-    if (pConverter->config.formatIn != midFormat) {
-        pConverter->hasPreFormatConversion = MA_TRUE;
-    }
-    if (pConverter->config.formatOut != midFormat) {
-        pConverter->hasPostFormatConversion = MA_TRUE;
-    }
-
-
     /* Channel converter. We always initialize this, but we check if it configures itself as a passthrough to determine whether or not it's needed. */
     {
         ma_uint32 iChannelIn;
@@ -34483,6 +34619,29 @@ MA_API ma_result ma_data_converter_init(const ma_data_converter_config* pConfig,
         }
 
         pConverter->hasResampler = MA_TRUE;
+    }
+
+
+    /* We can simplify pre- and post-format conversion if we have neither channel conversion nor resampling. */
+    if (pConverter->hasChannelConverter == MA_FALSE && pConverter->hasResampler == MA_FALSE) {
+        /* We have neither channel conversion nor resampling so we'll only need one of pre- or post-format conversion, or none if the input and output formats are the same. */
+        if (pConverter->config.formatIn == pConverter->config.formatOut) {
+            /* The formats are the same so we can just pass through. */
+            pConverter->hasPreFormatConversion  = MA_FALSE;
+            pConverter->hasPostFormatConversion = MA_FALSE;
+        } else {
+            /* The formats are different so we need to do either pre- or post-format conversion. It doesn't matter which. */
+            pConverter->hasPreFormatConversion  = MA_FALSE;
+            pConverter->hasPostFormatConversion = MA_TRUE;
+        }
+    } else {
+        /* We have a channel converter and/or resampler so we'll need channel conversion based on the mid format. */
+        if (pConverter->config.formatIn != midFormat) {
+            pConverter->hasPreFormatConversion = MA_TRUE;
+        }
+        if (pConverter->config.formatOut != midFormat) {
+            pConverter->hasPostFormatConversion = MA_TRUE;
+        }
     }
 
     /* We can enable passthrough optimizations if applicable. Note that we'll only be able to do this if the sample rate is static. */
@@ -39872,12 +40031,17 @@ static ma_uint64 ma_decoder_internal_on_read_pcm_frames__mp3(ma_decoder* pDecode
 
     MA_ASSERT(pDecoder   != NULL);
     MA_ASSERT(pFramesOut != NULL);
-    MA_ASSERT(pDecoder->internalFormat == ma_format_f32);
 
     pMP3 = (drmp3*)pDecoder->pInternalDecoder;
     MA_ASSERT(pMP3 != NULL);
 
+#if defined(DR_MP3_FLOAT_OUTPUT)
+    MA_ASSERT(pDecoder->internalFormat == ma_format_f32);
     return drmp3_read_pcm_frames_f32(pMP3, frameCount, (float*)pFramesOut);
+#else
+    MA_ASSERT(pDecoder->internalFormat == ma_format_s16);
+    return drmp3_read_pcm_frames_s16(pMP3, frameCount, (drmp3_int16*)pFramesOut);
+#endif
 }
 
 static ma_result ma_decoder_internal_on_seek_to_pcm_frame__mp3(ma_decoder* pDecoder, ma_uint64 frameIndex)
@@ -39911,7 +40075,6 @@ static ma_uint64 ma_decoder_internal_on_get_length_in_pcm_frames__mp3(ma_decoder
 static ma_result ma_decoder_init_mp3__internal(const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
     drmp3* pMP3;
-    drmp3_config mp3Config;
     drmp3_allocation_callbacks allocationCallbacks;
 
     MA_ASSERT(pConfig != NULL);
@@ -39928,20 +40091,10 @@ static ma_result ma_decoder_init_mp3__internal(const ma_decoder_config* pConfig,
     allocationCallbacks.onFree    = pDecoder->allocationCallbacks.onFree;
 
     /*
-    Try opening the decoder first. MP3 can have variable sample rates (it's per frame/packet). We therefore need
-    to use some smarts to determine the most appropriate internal sample rate. These are the rules we're going
-    to use:
-    
-    Sample Rates
-    1) If an output sample rate is specified in pConfig we just use that. Otherwise;
-    2) Fall back to 44100.
-    
-    The internal channel count is always stereo, and the internal format is always f32.
+    Try opening the decoder first. We always use whatever dr_mp3 reports for channel count and sample rate. The format is determined by
+    the presence of DR_MP3_FLOAT_OUTPUT.
     */
-    MA_ZERO_OBJECT(&mp3Config);
-    mp3Config.outputChannels = 2;
-    mp3Config.outputSampleRate = (pConfig->sampleRate != 0) ? pConfig->sampleRate : 44100;
-    if (!drmp3_init(pMP3, ma_decoder_internal_on_read__mp3, ma_decoder_internal_on_seek__mp3, pDecoder, &mp3Config, &allocationCallbacks)) {
+    if (!drmp3_init(pMP3, ma_decoder_internal_on_read__mp3, ma_decoder_internal_on_seek__mp3, pDecoder, &allocationCallbacks)) {
         ma__free_from_callbacks(pMP3, &pDecoder->allocationCallbacks);
         return MA_ERROR;
     }
@@ -39954,7 +40107,11 @@ static ma_result ma_decoder_init_mp3__internal(const ma_decoder_config* pConfig,
     pDecoder->pInternalDecoder       = pMP3;
 
     /* Internal format. */
+#if defined(DR_MP3_FLOAT_OUTPUT)
     pDecoder->internalFormat     = ma_format_f32;
+#else
+    pDecoder->internalFormat     = ma_format_s16;
+#endif
     pDecoder->internalChannels   = pMP3->channels;
     pDecoder->internalSampleRate = pMP3->sampleRate;
     ma_get_standard_channel_map(ma_standard_channel_map_default, pDecoder->internalChannels, pDecoder->internalChannelMap);
@@ -40512,7 +40669,6 @@ MA_API ma_result ma_decoder_init_memory_raw(const void* pData, size_t dataSize, 
     return ma_decoder__postinit(&config, pDecoder);
 }
 
-#ifndef MA_NO_STDIO
 static const char* ma_path_file_name(const char* path)
 {
     const char* fileName;
@@ -40916,7 +41072,6 @@ MA_API ma_result ma_decoder_init_file_mp3_w(const wchar_t* pFilePath, const ma_d
 
     return ma_decoder_init_mp3(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
 }
-#endif  /* MA_NO_STDIO */
 
 MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder)
 {
@@ -40928,12 +41083,10 @@ MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder)
         pDecoder->onUninit(pDecoder);
     }
 
-#ifndef MA_NO_STDIO
     /* If we have a file handle, close it. */
     if (pDecoder->onRead == ma_decoder__on_read_stdio) {
         fclose((FILE*)pDecoder->pUserData);
     }
-#endif
 
     ma_data_converter_uninit(&pDecoder->converter);
 
@@ -41121,7 +41274,6 @@ static ma_result ma_decoder__full_decode_and_uninit(ma_decoder* pDecoder, ma_dec
     return MA_SUCCESS;
 }
 
-#ifndef MA_NO_STDIO
 MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
 {
     ma_decoder_config config;
@@ -41148,7 +41300,6 @@ MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfi
 
     return ma_decoder__full_decode_and_uninit(&decoder, pConfig, pFrameCountOut, ppPCMFramesOut);
 }
-#endif
 
 MA_API ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
 {
@@ -41347,7 +41498,6 @@ MA_API ma_result ma_encoder_init__internal(ma_encoder_write_proc onWrite, ma_enc
     return MA_SUCCESS;
 }
 
-#ifndef MA_NO_STDIO
 MA_API size_t ma_encoder__on_write_stdio(ma_encoder* pEncoder, const void* pBufferIn, size_t bytesToWrite)
 {
     return fwrite(pBufferIn, 1, bytesToWrite, (FILE*)pEncoder->pFile);
@@ -41399,7 +41549,6 @@ MA_API ma_result ma_encoder_init_file_w(const wchar_t* pFilePath, const ma_encod
 
     return ma_encoder_init__internal(ma_encoder__on_write_stdio, ma_encoder__on_seek_stdio, NULL, pEncoder);
 }
-#endif
 
 MA_API ma_result ma_encoder_init(ma_encoder_write_proc onWrite, ma_encoder_seek_proc onSeek, void* pUserData, const ma_encoder_config* pConfig, ma_encoder* pEncoder)
 {
@@ -41424,12 +41573,10 @@ MA_API void ma_encoder_uninit(ma_encoder* pEncoder)
         pEncoder->onUninit(pEncoder);
     }
 
-#ifndef MA_NO_STDIO
     /* If we have a file handle, close it. */
     if (pEncoder->onWrite == ma_encoder__on_write_stdio) {
         fclose((FILE*)pEncoder->pFile);
     }
-#endif
 }
 
 
@@ -42263,6 +42410,17 @@ The following miscellaneous changes have also been made.
 /*
 REVISION HISTORY
 ================
+v0.10.3 - 2020-04-07
+  - Bring up to date with breaking changes to dr_mp3.
+  - Remove MA_NO_STDIO. This was causing compilation errors and the maintenance cost versus practical benefit is no longer worthwhile.
+  - Fix a bug with data conversion where it was unnecessarily converting to s16 or f32 and then straight back to the original format.
+  - Fix compilation errors and warnings with Visual Studio 2005.
+  - ALSA: Disable ALSA's automatic data conversion by default and add configuration options to the device config:
+    - alsa.noAutoFormat
+    - alsa.noAutoChannels
+    - alsa.noAutoResample
+  - WASAPI: Add some overrun recovery for ma_device_type_capture devices.
+
 v0.10.2 - 2020-03-22
   - Decorate some APIs with MA_API which were missed in the previous version.
   - Fix a bug in ma_linear_resampler_set_rate() and ma_linear_resampler_set_rate_ratio().
