@@ -1505,8 +1505,8 @@ class WavFileReadStream(io.RawIOBase):
 
 
 @ffi.def_extern()
-def _internal_pcmconverter_read_callback(ma_converter: ffi.CData, frames: ffi.CData,
-                                         framecount: int, userdata: ffi.CData) -> int:
+def _internal_dataconverter_read_callback(ma_converter: ffi.CData, frames: ffi.CData,
+                                          framecount: int, userdata: ffi.CData) -> int:
     if framecount <= 0 or not userdata:
         return framecount
     py_converter = ffi.from_handle(userdata)
@@ -1523,14 +1523,14 @@ class StreamingConverter:
             raise TypeError("producer must be a generator", type(frame_producer))
         self.frame_producer = frame_producer        # type: Optional[PlaybackCallbackGeneratorType]
         self._ffi_handle = ffi.new_handle(self)
-        self._conv_config = lib.ma_pcm_converter_config_init(
+        self._conv_config = lib.ma_data_converter_config_init(
             in_format.value, in_channels, in_samplerate, out_format.value, out_channels, out_samplerate,
-            lib._internal_pcmconverter_read_callback, self._ffi_handle)
+            lib._internal_dataconverter_read_callback, self._ffi_handle)
         self._conv_config.ditherMode = dither.value
-        self._converter = ffi.new("ma_pcm_converter*")
-        result = lib.ma_pcm_converter_init(ffi.addressof(self._conv_config), self._converter)
+        self._converter = ffi.new("ma_data_converter*")
+        result = lib.ma_data_converter_init(ffi.addressof(self._conv_config), self._converter)
         if result != lib.MA_SUCCESS:
-            raise MiniaudioError("failed to init pcm_converter", result)
+            raise MiniaudioError("failed to init data_converter", result)
         self.in_format = in_format
         self.in_channels = in_channels
         self.in_samplerate = in_samplerate
@@ -1549,7 +1549,7 @@ class StreamingConverter:
     def read(self, num_frames: int) -> array.array:
         """Read a chunk of frames from the source and return the given number of converted frames."""
         frames = bytearray(num_frames * self.out_channels * self.out_samplewidth)
-        num_converted_frames = lib.ma_pcm_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
+        num_converted_frames = lib.ma_data_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
         result = _array_proto_from_format(self.out_format)
         buf = memoryview(frames)[0:num_converted_frames * self.out_channels * self.out_samplewidth]
         result.frombytes(buf)       # type: ignore
