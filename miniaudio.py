@@ -291,7 +291,7 @@ def vorbis_read(data: bytes) -> DecodedSoundFile:
 
 def vorbis_stream_file(filename: str, seek_frame: int = 0) -> Generator[array.array, None, None]:
     """Streams the ogg vorbis audio file as interleaved 16 bit signed integer sample arrays segments.
-    This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
+    This uses a variable unconfigurable chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
     error = ffi.new("int *")
@@ -599,15 +599,11 @@ def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0
         lib.drmp3_free(memory, ffi.NULL)
 
 
-def mp3_stream_file(filename: str, frames_to_read: int = 1024,
-                    want_nchannels: int = 0, want_sample_rate: int = 0,
-                    seek_frame: int = 0) -> Generator[array.array, None, None]:
+def mp3_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
     """Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    # TODO convert the returned data to the desired output format
-    raise NotImplementedError("mp3 conversion has changed in new drmp3 - not via direct config possible anymore")
     mp3 = ffi.new("drmp3 *")
     if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
         raise DecodeError("could not open/decode file")
