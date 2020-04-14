@@ -97,6 +97,7 @@ int stb_vorbis_decode_filename(const char *filename, int *channels, int *sample_
 int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
 
 stb_vorbis * stb_vorbis_open_memory(const unsigned char *data, int len, int *error, const stb_vorbis_alloc *alloc_buffer);
+stb_vorbis * stb_vorbis_open_filename(const char *filename, int *error, const stb_vorbis_alloc *alloc_buffer);
 
 int stb_vorbis_seek_frame(stb_vorbis *f, unsigned int sample_number);
 int stb_vorbis_seek(stb_vorbis *f, unsigned int sample_number);
@@ -724,7 +725,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
     ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
 
-    /**** format conversion ****/
+    /**** format conversion TODO sync these functions ****/
     void ma_pcm_convert(void* pOut, ma_format formatOut, const void* pIn, ma_format formatIn, ma_uint64 sampleCount, ma_dither_mode ditherMode);
     void ma_deinterleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void* pInterleavedPCMFrames, void** ppDeinterleavedPCMFrames);
     void ma_interleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void** ppDeinterleavedPCMFrames, void* pInterleavedPCMFrames);
@@ -743,7 +744,17 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS], ma_channel channelPosition);
 
     /*** streaming sound conversion ***/
-    /* TODO this was renamed to ma_data_converter */
+    ma_data_converter_config ma_data_converter_config_init_default(void);
+    ma_data_converter_config ma_data_converter_config_init(ma_format formatIn, ma_format formatOut, ma_uint32 channelsIn, ma_uint32 channelsOut, ma_uint32 sampleRateIn, ma_uint32 sampleRateOut);
+    ma_result ma_data_converter_init(const ma_data_converter_config* pConfig, ma_data_converter* pConverter);
+    void ma_data_converter_uninit(ma_data_converter* pConverter);
+    ma_result ma_data_converter_process_pcm_frames(ma_data_converter* pConverter, const void* pFramesIn, ma_uint64* pFrameCountIn, void* pFramesOut, ma_uint64* pFrameCountOut);
+    ma_result ma_data_converter_set_rate(ma_data_converter* pConverter, ma_uint32 sampleRateIn, ma_uint32 sampleRateOut);
+    ma_result ma_data_converter_set_rate_ratio(ma_data_converter* pConverter, float ratioInOut);
+    ma_uint64 ma_data_converter_get_required_input_frame_count(ma_data_converter* pConverter, ma_uint64 outputFrameCount);
+    ma_uint64 ma_data_converter_get_expected_output_frame_count(ma_data_converter* pConverter, ma_uint64 inputFrameCount);
+    ma_uint64 ma_data_converter_get_input_latency(ma_data_converter* pConverter);
+    ma_uint64 ma_data_converter_get_output_latency(ma_data_converter* pConverter);
 
 
     /**** misc ****/
@@ -756,12 +767,8 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     void free(void *ptr);
 
     /**** callbacks ****/
-    /* ma_device_callback_proc */
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
-    /* ma_stop_proc */
     extern "Python" void _internal_stop_callback(ma_device* pDevice);
-    /* ma_pcm_converter_read_proc */
-    /* TODO this was renamed? */
     extern "Python" ma_uint32 _internal_dataconverter_read_callback(ma_data_converter* pConverter, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
     
     /* decoder read and seek callbacks */

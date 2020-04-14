@@ -495,11 +495,8 @@ def flac_stream_file(filename: str, frames_to_read: int = 1024,
 def mp3_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (mp3 format)."""
     filenamebytes = _get_filename_bytes(filename)
-    config = ffi.new("drmp3_config *")
-    config.outputChannels = 0
-    config.outputSampleRate = 0
     mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_file(mp3, filenamebytes, config, ffi.NULL):
+    if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
         raise DecodeError("could not open/decode file")
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
@@ -512,11 +509,8 @@ def mp3_get_file_info(filename: str) -> SoundFileInfo:
 
 def mp3_get_info(data: bytes) -> SoundFileInfo:
     """Fetch some information about the audio data (mp3 format)."""
-    config = ffi.new("drmp3_config *")
-    config.outputChannels = 0
-    config.outputSampleRate = 0
     mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_memory(mp3, data, len(data), config, ffi.NULL):
+    if not lib.drmp3_init_memory(mp3, data, len(data), ffi.NULL):
         raise DecodeError("could not open/decode data")
     try:
         num_frames = lib.drmp3_get_pcm_frame_count(mp3)
@@ -612,11 +606,10 @@ def mp3_stream_file(filename: str, frames_to_read: int = 1024,
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    config = ffi.new("drmp3_config *")
-    config.outputChannels = want_nchannels
-    config.outputSampleRate = want_sample_rate
+    # TODO convert the returned data to the desired output format
+    raise NotImplementedError("mp3 conversion has changed in new drmp3 - not via direct config possible anymore")
     mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_file(mp3, filenamebytes, config, ffi.NULL):
+    if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
         raise DecodeError("could not open/decode file")
     if seek_frame > 0:
         result = lib.drmp3_seek_to_pcm_frame(mp3, seek_frame)
@@ -1159,11 +1152,12 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
     sample_width = _width_from_format(from_fmt)
     num_frames = int(len(sourcedata) / from_numchannels / sample_width)
     sample_width = _width_from_format(to_fmt)
-    output_frame_count = lib.ma_calculate_frame_count_after_src(to_samplerate, from_samplerate, num_frames)
+    output_frame_count = lib.ma_calculate_frame_count_after_resampling(to_samplerate, from_samplerate, num_frames)
     buffer = bytearray(output_frame_count * sample_width * to_numchannels)
     # note: the API doesn't have an option here to specify the dither mode.
-    lib.ma_convert_frames(ffi.from_buffer(buffer), to_fmt.value, to_numchannels, to_samplerate,
-                          sourcedata, from_fmt.value, from_numchannels, from_samplerate, num_frames)
+    # TODO is the second parameter okay? (frameCountOut)
+    lib.ma_convert_frames(ffi.from_buffer(buffer), num_frames, to_fmt.value, to_numchannels, to_samplerate,
+                          sourcedata, num_frames, from_fmt.value, from_numchannels, from_samplerate)
     return buffer
 
 
@@ -1281,7 +1275,7 @@ class CaptureDevice(AbstractDevice):
         self._devconfig.capture.channels = self.nchannels
         self._devconfig.capture.format = self.format.value
         self._devconfig.capture.pDeviceID = device_id or ffi.NULL
-        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
+        self._devconfig.periodSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
@@ -1335,7 +1329,7 @@ class PlaybackDevice(AbstractDevice):
         self._devconfig.playback.channels = self.nchannels
         self._devconfig.playback.format = self.format.value
         self._devconfig.playback.pDeviceID = device_id or ffi.NULL
-        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
+        self._devconfig.periodSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
@@ -1401,7 +1395,7 @@ class DuplexStream(AbstractDevice):
         self._devconfig.capture.channels = self.capture_channels
         self._devconfig.capture.format = self.capture_format.value
         self._devconfig.capture.pDeviceID = capture_device_id or ffi.NULL
-        self._devconfig.bufferSizeInMilliseconds = self.buffersize_msec
+        self._devconfig.periodSizeInMilliseconds = self.buffersize_msec
         self._devconfig.pUserData = self._ffi_handle
         self._devconfig.dataCallback = lib._internal_data_callback
         self._devconfig.stopCallback = lib._internal_stop_callback
@@ -1523,9 +1517,8 @@ class StreamingConverter:
             raise TypeError("producer must be a generator", type(frame_producer))
         self.frame_producer = frame_producer        # type: Optional[PlaybackCallbackGeneratorType]
         self._ffi_handle = ffi.new_handle(self)
-        self._conv_config = lib.ma_data_converter_config_init(
-            in_format.value, in_channels, in_samplerate, out_format.value, out_channels, out_samplerate,
-            lib._internal_dataconverter_read_callback, self._ffi_handle)
+        self._conv_config = lib.ma_data_converter_config_init(in_format.value, out_format.value, in_channels, out_channels, in_samplerate, out_samplerate)
+        # TODO configure additional properties on the converter:       lib._internal_dataconverter_read_callback, self._ffi_handle
         self._conv_config.ditherMode = dither.value
         self._converter = ffi.new("ma_data_converter*")
         result = lib.ma_data_converter_init(ffi.addressof(self._conv_config), self._converter)
@@ -1549,7 +1542,8 @@ class StreamingConverter:
     def read(self, num_frames: int) -> array.array:
         """Read a chunk of frames from the source and return the given number of converted frames."""
         frames = bytearray(num_frames * self.out_channels * self.out_samplewidth)
-        num_converted_frames = lib.ma_data_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
+        # TODO this method no longer exists:  ma_data_converter_read
+        num_converted_frames = 0  # XXX  lib.ma_data_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
         result = _array_proto_from_format(self.out_format)
         buf = memoryview(frames)[0:num_converted_frames * self.out_channels * self.out_samplewidth]
         result.frombytes(buf)       # type: ignore
