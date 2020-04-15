@@ -14,7 +14,7 @@ def samples_path(filename):
 src = miniaudio.decode_file(samples_path("music.ogg"), dither=miniaudio.DitherMode.TRIANGLE)
 print("Source: ", src)
 
-result = miniaudio.DecodedSoundFile("result", 1, 22050, miniaudio.SampleFormat.UNSIGNED8, array.array('b'))
+result = miniaudio.DecodedSoundFile("result", 1, 11025, miniaudio.SampleFormat.UNSIGNED8, array.array('b'))
 converted_frames = miniaudio.convert_frames(src.sample_format, src.nchannels, src.sample_rate, src.samples.tobytes(),
                                             result.sample_format, result.nchannels, result.sample_rate)
 # note: currently it is not possible to provide a dithermode to convert_frames()

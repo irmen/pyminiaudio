@@ -1151,8 +1151,7 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
     output_frame_count = lib.ma_calculate_frame_count_after_resampling(to_samplerate, from_samplerate, num_frames)
     buffer = bytearray(output_frame_count * sample_width * to_numchannels)
     # note: the API doesn't have an option here to specify the dither mode.
-    # TODO is the second parameter okay? (frameCountOut)
-    lib.ma_convert_frames(ffi.from_buffer(buffer), num_frames, to_fmt.value, to_numchannels, to_samplerate,
+    lib.ma_convert_frames(ffi.from_buffer(buffer), output_frame_count, to_fmt.value, to_numchannels, to_samplerate,
                           sourcedata, num_frames, from_fmt.value, from_numchannels, from_samplerate)
     return buffer
 
@@ -1494,27 +1493,12 @@ class WavFileReadStream(io.RawIOBase):
         pass
 
 
-@ffi.def_extern()
-def _internal_dataconverter_read_callback(ma_converter: ffi.CData, frames: ffi.CData,
-                                          framecount: int, userdata: ffi.CData) -> int:
-    if framecount <= 0 or not userdata:
-        return framecount
-    py_converter = ffi.from_handle(userdata)
-    return py_converter._read_callback(ma_converter, frames, framecount)
-
-
-class StreamingConverter:
-    """Sample format converter that works on streams stream, rather than doing all at once."""
+class DataConverter:
+    """Sample format data converter."""
     def __init__(self, in_format: SampleFormat, in_channels: int, in_samplerate: int,
                  out_format: SampleFormat, out_channels: int, out_samplerate: int,
-                 frame_producer: PlaybackCallbackGeneratorType,
                  dither: DitherMode = DitherMode.NONE) -> None:
-        if not inspect.isgenerator(frame_producer):
-            raise TypeError("producer must be a generator", type(frame_producer))
-        self.frame_producer = frame_producer        # type: Optional[PlaybackCallbackGeneratorType]
-        self._ffi_handle = ffi.new_handle(self)
         self._conv_config = lib.ma_data_converter_config_init(in_format.value, out_format.value, in_channels, out_channels, in_samplerate, out_samplerate)
-        # TODO configure additional properties on the converter:       lib._internal_dataconverter_read_callback, self._ffi_handle
         self._conv_config.ditherMode = dither.value
         self._converter = ffi.new("ma_data_converter*")
         result = lib.ma_data_converter_init(ffi.addressof(self._conv_config), self._converter)
@@ -1529,37 +1513,21 @@ class StreamingConverter:
         self.out_samplerate = out_samplerate
         self.out_samplewidth = _width_from_format(out_format)
 
-    def __del__(self) -> None:
-        self.close()
+    def __del__(self):
+        lib.ma_data_converter_uninit(self._converter)
 
-    def close(self) -> None:
-        pass
-
-    def read(self, num_frames: int) -> array.array:
-        """Read a chunk of frames from the source and return the given number of converted frames."""
-        frames = bytearray(num_frames * self.out_channels * self.out_samplewidth)
-        # TODO this method no longer exists:  ma_data_converter_read
-        num_converted_frames = 0  # XXX  lib.ma_data_converter_read(self._converter, ffi.from_buffer(frames), num_frames)
-        result = _array_proto_from_format(self.out_format)
-        buf = memoryview(frames)[0:num_converted_frames * self.out_channels * self.out_samplewidth]
-        result.frombytes(buf)       # type: ignore
-        return result
-
-    def _read_callback(self, converter: ffi.CData, frames: ffi.CData, framecount: int) -> int:
-        if self.frame_producer:
-            try:
-                data = self.frame_producer.send(framecount)
-            except StopIteration:
-                self.frame_producer = None
-                return 0
-            except Exception:
-                self.frame_producer = None
-                raise
-            frames_bytes = _bytes_from_generator_samples(data)
-            if frames_bytes:
-                if len(frames_bytes) > framecount * self.in_samplewidth * self.in_channels:
-                    self.frame_producer = None
-                    raise MiniaudioError("number of frames from callback exceeds maximum")
-                ffi.memmove(frames, frames_bytes, len(frames_bytes))
-                return int(len(frames_bytes) / self.in_samplewidth / self.in_channels)
-        return 0
+    def convert(self, source_frames: array.array) -> bytes:
+        """Convert a chunk of audio frames to frames in the configured output format."""
+        num_source_frames = len(source_frames) // self.in_channels
+        expected_num_output_frames = lib.ma_data_converter_get_expected_output_frame_count(self._converter, num_source_frames)
+        num_in_frames = ffi.new("uint64_t *")
+        num_in_frames[0] = num_source_frames
+        num_out_frames = ffi.new("uint64_t *")
+        num_out_frames[0] = expected_num_output_frames
+        out_data = bytes(self.out_samplewidth*expected_num_output_frames*self.out_channels)
+        result = lib.ma_data_converter_process_pcm_frames(self._converter, source_frames.tobytes(), num_in_frames, out_data, num_out_frames)
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("conversion error", result)
+        if num_in_frames[0] != num_source_frames:
+            raise MiniaudioError("conversion changed number of input frames", num_in_frames[0], len(source_frames))
+        return out_data[:self.out_channels*self.out_samplewidth*num_out_frames[0]]

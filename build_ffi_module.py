@@ -652,7 +652,6 @@ typedef struct
     ma_channel_mix_mode channelMixMode;
     float channelWeights[MA_MAX_CHANNELS][MA_MAX_CHANNELS];  /* [in][out]. Only used when channelMixMode is set to ma_channel_mix_mode_custom_weights. */
     
-    // TODO resampling?
     ...;
 } ma_data_converter_config;
 
@@ -725,7 +724,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
     ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
 
-    /**** format conversion TODO sync these functions ****/
+    /**** format conversion ****/
     void ma_pcm_convert(void* pOut, ma_format formatOut, const void* pIn, ma_format formatIn, ma_uint64 sampleCount, ma_dither_mode ditherMode);
     void ma_deinterleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void* pInterleavedPCMFrames, void** ppDeinterleavedPCMFrames);
     void ma_interleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void** ppDeinterleavedPCMFrames, void* pInterleavedPCMFrames);
@@ -769,7 +768,6 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     /**** callbacks ****/
     extern "Python" void _internal_data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     extern "Python" void _internal_stop_callback(ma_device* pDevice);
-    extern "Python" ma_uint32 _internal_dataconverter_read_callback(ma_data_converter* pConverter, void* pFramesOut, ma_uint32 frameCount, void* pUserData);
     
     /* decoder read and seek callbacks */
     extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
