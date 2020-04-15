@@ -774,6 +774,9 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
 """
 
+# TODO: expose and support filter API,  expose and support waveform and noise generation APIs.
+
+
 ffibuilder = FFI()
 ffibuilder.cdef(vorbis_defs + miniaudio_defs)
 

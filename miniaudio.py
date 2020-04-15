@@ -5,7 +5,9 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.20"
+# TODO: expose and support filter API,  expose and support waveform and noise generation APIs.
+
+__version__ = "1.20.dev0"
 
 
 import abc
