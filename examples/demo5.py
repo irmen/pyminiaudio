@@ -51,4 +51,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit("use one argument: filename")
     info = miniaudio.get_file_info(sys.argv[1])
+    print(info)
     stream_file(info, sys.argv[1])
