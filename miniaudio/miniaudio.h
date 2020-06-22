@@ -1,6 +1,6 @@
 /*
 Audio playback and capture library. Choice of public domain or MIT-0. See license statements at the end of this file.
-miniaudio - v0.10.7 - 2020-05-25
+miniaudio - v0.10.8 - 2020-06-22
 
 David Reid - davidreidsoftware@gmail.com
 
@@ -1539,7 +1539,7 @@ extern "C" {
 
 #define MA_VERSION_MAJOR    0
 #define MA_VERSION_MINOR    10
-#define MA_VERSION_REVISION 7
+#define MA_VERSION_REVISION 8
 #define MA_VERSION_STRING   MA_XSTRINGIFY(MA_VERSION_MAJOR) "." MA_XSTRINGIFY(MA_VERSION_MINOR) "." MA_XSTRINGIFY(MA_VERSION_REVISION)
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -1569,7 +1569,6 @@ extern "C" {
     /* We only use multi-threading with the device IO API, so no need to include these headers otherwise. */
 #if !defined(MA_NO_DEVICE_IO)
     #include <pthread.h>    /* Unfortunate #include, but needed for pthread_t, pthread_mutex_t and pthread_cond_t types. */
-    #include <semaphore.h>
 #endif
 
     #ifdef __unix__
@@ -1724,7 +1723,30 @@ typedef ma_uint16 wchar_t;
 #define MA_SIMD_ALIGNMENT  64
 
 
-/* Logging levels */
+/*
+Logging Levels
+==============
+A log level will automatically include the lower levels. For example, verbose logging will enable everything. The warning log level will only include warnings
+and errors, but will ignore informational and verbose logging. If you only want to handle a specific log level, implement a custom log callback (see
+ma_context_init() for details) and interrogate the `logLevel` parameter.
+
+By default the log level will be set to MA_LOG_LEVEL_ERROR, but you can change this by defining MA_LOG_LEVEL before the implementation of miniaudio.
+
+MA_LOG_LEVEL_VERBOSE
+    Mainly intended for debugging. This will enable all log levels and can be triggered from within the data callback so care must be taken when enabling this
+    in production environments.
+
+MA_LOG_LEVEL_INFO
+    Informational logging. Useful for debugging. This will also enable warning and error logs. This will never be called from within the data callback.
+
+MA_LOG_LEVEL_WARNING
+    Warnings. You should enable this in you development builds and action them when encounted. This will also enable error logs. These logs usually indicate a
+    potential problem or misconfiguration, but still allow you to keep running. This will never be called from within the data callback.
+
+MA_LOG_LEVEL_ERROR
+    Error logging. This will be fired when an operation fails and is subsequently aborted. This can be fired from within the data callback, in which case the
+    device will be stopped. You should always have this log level enabled.
+*/
 #define MA_LOG_LEVEL_VERBOSE   4
 #define MA_LOG_LEVEL_INFO      3
 #define MA_LOG_LEVEL_WARNING   2
@@ -1890,7 +1912,9 @@ typedef int ma_result;
 #define MA_SAMPLE_RATE_384000                          384000
 
 #define MA_MIN_CHANNELS                                1
+#ifndef MA_MAX_CHANNELS
 #define MA_MAX_CHANNELS                                32
+#endif
 #define MA_MIN_SAMPLE_RATE                             MA_SAMPLE_RATE_8000
 #define MA_MAX_SAMPLE_RATE                             MA_SAMPLE_RATE_384000
 
@@ -2977,95 +3001,43 @@ typedef enum
     ma_thread_priority_default  =  0
 } ma_thread_priority;
 
+#if defined(MA_WIN32)
+typedef ma_handle ma_thread;
+#endif
+#if defined(MA_POSIX)
+typedef pthread_t ma_thread;
+#endif
+
+#if defined(MA_WIN32)
+typedef ma_handle ma_mutex;
+#endif
+#if defined(MA_POSIX)
+typedef pthread_mutex_t ma_mutex;
+#endif
+
+#if defined(MA_WIN32)
+typedef ma_handle ma_event;
+#endif
+#if defined(MA_POSIX)
 typedef struct
 {
-    ma_context* pContext;
-
-    union
-    {
-#ifdef MA_WIN32
-        struct
-        {
-            /*HANDLE*/ ma_handle hThread;
-        } win32;
-#endif
-#ifdef MA_POSIX
-        struct
-        {
-            pthread_t thread;
-        } posix;
-#endif
-        int _unused;
-    };
-} ma_thread;
-
-typedef struct
-{
-    ma_context* pContext;
-
-    union
-    {
-#ifdef MA_WIN32
-        struct
-        {
-            /*HANDLE*/ ma_handle hMutex;
-        } win32;
-#endif
-#ifdef MA_POSIX
-        struct
-        {
-            pthread_mutex_t mutex;
-        } posix;
-#endif
-        int _unused;
-    };
-} ma_mutex;
-
-typedef struct
-{
-    ma_context* pContext;
-
-    union
-    {
-#ifdef MA_WIN32
-        struct
-        {
-            /*HANDLE*/ ma_handle hEvent;
-        } win32;
-#endif
-#ifdef MA_POSIX
-        struct
-        {
-            pthread_mutex_t mutex;
-            pthread_cond_t condition;
-            ma_uint32 value;
-        } posix;
-#endif
-        int _unused;
-    };
+    ma_uint32 value;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
 } ma_event;
+#endif
 
+#if defined(MA_WIN32)
+typedef ma_handle ma_semaphore;
+#endif
+#if defined(MA_POSIX)
 typedef struct
 {
-    ma_context* pContext;
-
-    union
-    {
-#ifdef MA_WIN32
-        struct
-        {
-            /*HANDLE*/ ma_handle hSemaphore;
-        } win32;
-#endif
-#ifdef MA_POSIX
-        struct
-        {
-            sem_t semaphore;
-        } posix;
-#endif
-        int _unused;
-    };
+    int value;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
 } ma_semaphore;
+#endif
 
 
 /*
@@ -3280,7 +3252,7 @@ typedef struct
     } resampling;
     struct
     {
-        ma_device_id* pDeviceID;
+        const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
         ma_channel channelMap[MA_MAX_CHANNELS];
@@ -3288,7 +3260,7 @@ typedef struct
     } playback;
     struct
     {
-        ma_device_id* pDeviceID;
+        const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
         ma_channel channelMap[MA_MAX_CHANNELS];
@@ -3320,6 +3292,7 @@ typedef struct
 {
     ma_log_proc logCallback;
     ma_thread_priority threadPriority;
+    size_t threadStackSize;
     void* pUserData;
     ma_allocation_callbacks allocationCallbacks;
     struct
@@ -3371,6 +3344,7 @@ struct ma_context
     ma_backend backend;                    /* DirectSound, ALSA, etc. */
     ma_log_proc logCallback;
     ma_thread_priority threadPriority;
+    size_t threadStackSize;
     void* pUserData;
     ma_allocation_callbacks allocationCallbacks;
     ma_mutex deviceEnumLock;               /* Used to make ma_context_get_devices() thread safe. */
@@ -5196,19 +5170,25 @@ ma_device_get_master_volume()
 MA_API ma_result ma_device_get_master_gain_db(ma_device* pDevice, float* pGainDB);
 
 
+/*
+Retrieves a friendly name for a backend.
+*/
+MA_API const char* ma_get_backend_name(ma_backend backend);
 
-/************************************************************************************************************************************************************
+/*
+Determines whether or not loopback mode is support by a backend.
+*/
+MA_API ma_bool32 ma_is_loopback_supported(ma_backend backend);
 
-Utiltities
+#endif  /* MA_NO_DEVICE_IO */
 
-************************************************************************************************************************************************************/
 
 /*
 Creates a mutex.
 
 A mutex must be created from a valid context. A mutex is initially unlocked.
 */
-MA_API ma_result ma_mutex_init(ma_context* pContext, ma_mutex* pMutex);
+MA_API ma_result ma_mutex_init(ma_mutex* pMutex);
 
 /*
 Deletes a mutex.
@@ -5227,15 +5207,31 @@ MA_API void ma_mutex_unlock(ma_mutex* pMutex);
 
 
 /*
-Retrieves a friendly name for a backend.
+Initializes an auto-reset event.
 */
-MA_API const char* ma_get_backend_name(ma_backend backend);
+MA_API ma_result ma_event_init(ma_event* pEvent);
 
 /*
-Determines whether or not loopback mode is support by a backend.
+Uninitializes an auto-reset event.
 */
-MA_API ma_bool32 ma_is_loopback_supported(ma_backend backend);
+MA_API void ma_event_uninit(ma_event* pEvent);
 
+/*
+Waits for the specified auto-reset event to become signalled.
+*/
+MA_API ma_result ma_event_wait(ma_event* pEvent);
+
+/*
+Signals the specified auto-reset event.
+*/
+MA_API ma_result ma_event_signal(ma_event* pEvent);
+
+
+/************************************************************************************************************************************************************
+
+Utiltities
+
+************************************************************************************************************************************************************/
 
 /*
 Adjust buffer size based on a scaling factor.
@@ -5269,6 +5265,13 @@ makes more sense for the purpose of mixing to initialize it to the center point.
 */
 MA_API void ma_silence_pcm_frames(void* p, ma_uint64 frameCount, ma_format format, ma_uint32 channels);
 static MA_INLINE void ma_zero_pcm_frames(void* p, ma_uint64 frameCount, ma_format format, ma_uint32 channels) { ma_silence_pcm_frames(p, frameCount, format, channels); }
+
+
+/*
+Offsets a pointer by the specified number of PCM frames.
+*/
+MA_API void* ma_offset_pcm_frames_ptr(void* p, ma_uint64 offsetInFrames, ma_format format, ma_uint32 channels);
+MA_API const void* ma_offset_pcm_frames_const_ptr(const void* p, ma_uint64 offsetInFrames, ma_format format, ma_uint32 channels);
 
 
 /*
@@ -5319,20 +5322,23 @@ Helper for converting gain in decibels to a linear factor.
 */
 MA_API float ma_gain_db_to_factor(float gain);
 
-#endif  /* MA_NO_DEVICE_IO */
-
 
 typedef void ma_data_source;
 
 typedef struct
 {
-    ma_uint64 (* onRead)(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount);
+    ma_result (* onRead)(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
     ma_result (* onSeek)(ma_data_source* pDataSource, ma_uint64 frameIndex);
+    ma_result (* onMap)(ma_data_source* pDataSource, void** ppFramesOut, ma_uint64* pFrameCount);   /* Returns MA_AT_END if the end has been reached. This should be considered successful. */
+    ma_result (* onUnmap)(ma_data_source* pDataSource, ma_uint64 frameCount);
     ma_result (* onGetDataFormat)(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels);
 } ma_data_source_callbacks;
 
-MA_API ma_uint64 ma_data_source_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount);
+MA_API ma_result ma_data_source_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead, ma_bool32 loop);   /* Must support pFramesOut = NULL in which case a forward seek should be performed. */
+MA_API ma_result ma_data_source_seek_pcm_frames(ma_data_source* pDataSource, ma_uint64 frameCount, ma_uint64* pFramesSeeked, ma_bool32 loop); /* Can only seek forward. Equivalent to ma_data_source_read_pcm_frames(pDataSource, NULL, frameCount); */
 MA_API ma_result ma_data_source_seek_to_pcm_frame(ma_data_source* pDataSource, ma_uint64 frameIndex);
+MA_API ma_result ma_data_source_map(ma_data_source* pDataSource, void** ppFramesOut, ma_uint64* pFrameCount);
+MA_API ma_result ma_data_source_unmap(ma_data_source* pDataSource, ma_uint64 frameCount);   /* Returns MA_AT_END if the end has been reached. This should be considered successful. */
 MA_API ma_result ma_data_source_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels);
 
 
@@ -5368,15 +5374,17 @@ MA_API void ma_audio_buffer_uninit_and_free(ma_audio_buffer* pAudioBuffer);
 MA_API ma_uint64 ma_audio_buffer_read_pcm_frames(ma_audio_buffer* pAudioBuffer, void* pFramesOut, ma_uint64 frameCount, ma_bool32 loop);
 MA_API ma_result ma_audio_buffer_seek_to_pcm_frame(ma_audio_buffer* pAudioBuffer, ma_uint64 frameIndex);
 MA_API ma_result ma_audio_buffer_map(ma_audio_buffer* pAudioBuffer, void** ppFramesOut, ma_uint64* pFrameCount);
-MA_API ma_result ma_audio_buffer_unmap(ma_audio_buffer* pAudioBuffer, ma_uint64 frameCount);
+MA_API ma_result ma_audio_buffer_unmap(ma_audio_buffer* pAudioBuffer, ma_uint64 frameCount);    /* Returns MA_AT_END if the end has been reached. This should be considered successful. */
 MA_API ma_result ma_audio_buffer_at_end(ma_audio_buffer* pAudioBuffer);
+
 
 
 #if !defined(MA_NO_DECODING) || !defined(MA_NO_ENCODING)
 typedef enum
 {
     ma_seek_origin_start,
-    ma_seek_origin_current
+    ma_seek_origin_current,
+    ma_seek_origin_end  /* Not used by decoders. */
 } ma_seek_origin;
 
 typedef enum
@@ -5384,6 +5392,60 @@ typedef enum
     ma_resource_format_wav
 } ma_resource_format;
 #endif
+
+
+
+/************************************************************************************************************************************************************
+
+VFS
+===
+
+The VFS object (virtual file system) is what's used to customize file access. This is useful in cases where stdio FILE* based APIs may not be entirely
+appropriate for a given situation.
+
+************************************************************************************************************************************************************/
+typedef void      ma_vfs;
+typedef ma_handle ma_vfs_file;
+
+#define MA_OPEN_MODE_READ   0x00000001
+#define MA_OPEN_MODE_WRITE  0x00000002
+
+typedef struct
+{
+    ma_uint64 sizeInBytes;
+} ma_file_info;
+
+typedef struct
+{
+    ma_result (* onOpen) (ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile);
+    ma_result (* onOpenW)(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile);
+    ma_result (* onClose)(ma_vfs* pVFS, ma_vfs_file file);
+    ma_result (* onRead) (ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead);
+    ma_result (* onWrite)(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten);
+    ma_result (* onSeek) (ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin);
+    ma_result (* onTell) (ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor);
+    ma_result (* onInfo) (ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo);
+} ma_vfs_callbacks;
+
+MA_API ma_result ma_vfs_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile);
+MA_API ma_result ma_vfs_open_w(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile);
+MA_API ma_result ma_vfs_close(ma_vfs* pVFS, ma_vfs_file file);
+MA_API ma_result ma_vfs_read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead);
+MA_API ma_result ma_vfs_write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten);
+MA_API ma_result ma_vfs_seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin);
+MA_API ma_result ma_vfs_tell(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor);
+MA_API ma_result ma_vfs_info(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo);
+MA_API ma_result ma_vfs_open_and_read_file(ma_vfs* pVFS, const char* pFilePath, void** ppData, size_t* pSize, const ma_allocation_callbacks* pAllocationCallbacks);
+
+typedef struct
+{
+    ma_vfs_callbacks cb;
+    ma_allocation_callbacks allocationCallbacks;    /* Only used for the wchar_t version of open() on non-Windows platforms. */
+} ma_default_vfs;
+
+MA_API ma_result ma_default_vfs_init(ma_default_vfs* pVFS, const ma_allocation_callbacks* pAllocationCallbacks);
+
+
 
 /************************************************************************************************************************************************************
 
@@ -5398,7 +5460,7 @@ you do your own synchronization.
 typedef struct ma_decoder ma_decoder;
 
 typedef size_t    (* ma_decoder_read_proc)                    (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);     /* Returns the number of bytes read. */
-typedef ma_bool32 (* ma_decoder_seek_proc)                    (ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
+typedef ma_bool32 (* ma_decoder_seek_proc)                    (ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);    /* Origin will never be ma_seek_origin_end. */
 typedef ma_uint64 (* ma_decoder_read_pcm_frames_proc)         (ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount);   /* Returns the number of frames read. Output data is in internal format. */
 typedef ma_result (* ma_decoder_seek_to_pcm_frame_proc)       (ma_decoder* pDecoder, ma_uint64 frameIndex);
 typedef ma_result (* ma_decoder_uninit_proc)                  (ma_decoder* pDecoder);
@@ -5449,12 +5511,20 @@ struct ma_decoder
     ma_decoder_uninit_proc onUninit;
     ma_decoder_get_length_in_pcm_frames_proc onGetLengthInPCMFrames;
     void* pInternalDecoder; /* <-- The drwav/drflac/stb_vorbis/etc. objects. */
-    struct
+    union
     {
-        const ma_uint8* pData;
-        size_t dataSize;
-        size_t currentReadPos;
-    } memory;               /* Only used for decoders that were opened against a block of memory. */
+        struct
+        {
+            ma_vfs* pVFS;
+            ma_vfs_file file;
+        } vfs;
+        struct
+        {
+            const ma_uint8* pData;
+            size_t dataSize;
+            size_t currentReadPos;
+        } memory;               /* Only used for decoders that were opened against a block of memory. */
+    } backend;
 };
 
 MA_API ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outputChannels, ma_uint32 outputSampleRate);
@@ -5462,28 +5532,40 @@ MA_API ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint3
 MA_API ma_result ma_decoder_init(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_wav(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_flac(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-MA_API ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_raw(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
 
 MA_API ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_memory_flac(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_memory_raw(const void* pData, size_t dataSize, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
+
+MA_API ma_result ma_decoder_init_vfs(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_wav(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_flac(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_mp3(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_vorbis(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+
+MA_API ma_result ma_decoder_init_vfs_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_wav_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_flac_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_mp3_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_vfs_vorbis_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 
 MA_API ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_wav(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_flac(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-MA_API ma_result ma_decoder_init_file_vorbis(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_mp3(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_file_vorbis(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 
 MA_API ma_result ma_decoder_init_file_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_wav_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_flac_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-MA_API ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 MA_API ma_result ma_decoder_init_file_mp3_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
+MA_API ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 
 MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder);
 
@@ -5521,8 +5603,9 @@ MA_API ma_result ma_decoder_seek_to_pcm_frame(ma_decoder* pDecoder, ma_uint64 fr
 Helper for opening and decoding a file into a heap allocated block of memory. Free the returned pointer with ma_free(). On input,
 pConfig should be set to what you want. On output it will be set to what you got.
 */
-MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
-MA_API ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
+MA_API ma_result ma_decode_from_vfs(ma_vfs* pVFS, const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut);
+MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut);
+MA_API ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut);
 
 #endif  /* MA_NO_DECODING */
 
@@ -5696,6 +5779,8 @@ IMPLEMENTATION
 #include <stdlib.h> /* For malloc(), free(), wcstombs(). */
 #include <string.h> /* For memset() */
 #endif
+
+#include <sys/stat.h>   /* For fstat(), etc. */
 
 #ifdef MA_EMSCRIPTEN
 #include <emscripten/emscripten.h>
@@ -6054,6 +6139,33 @@ static MA_INLINE ma_bool32 ma_has_neon(void)
 #endif
 
 
+#if defined(_MSC_VER) && _MSC_VER >= 1400
+    #define MA_HAS_BYTESWAP16_INTRINSIC
+    #define MA_HAS_BYTESWAP32_INTRINSIC
+    #define MA_HAS_BYTESWAP64_INTRINSIC
+#elif defined(__clang__)
+    #if defined(__has_builtin)
+        #if __has_builtin(__builtin_bswap16)
+            #define MA_HAS_BYTESWAP16_INTRINSIC
+        #endif
+        #if __has_builtin(__builtin_bswap32)
+            #define MA_HAS_BYTESWAP32_INTRINSIC
+        #endif
+        #if __has_builtin(__builtin_bswap64)
+            #define MA_HAS_BYTESWAP64_INTRINSIC
+        #endif
+    #endif
+#elif defined(__GNUC__)
+    #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
+        #define MA_HAS_BYTESWAP32_INTRINSIC
+        #define MA_HAS_BYTESWAP64_INTRINSIC
+    #endif
+    #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
+        #define MA_HAS_BYTESWAP16_INTRINSIC
+    #endif
+#endif
+
+
 static MA_INLINE ma_bool32 ma_is_little_endian(void)
 {
 #if defined(MA_X86) || defined(MA_X64)
@@ -6068,6 +6180,39 @@ static MA_INLINE ma_bool32 ma_is_big_endian(void)
 {
     return !ma_is_little_endian();
 }
+
+
+static MA_INLINE ma_uint32 ma_swap_endian_uint32(ma_uint32 n)
+{
+#ifdef MA_HAS_BYTESWAP32_INTRINSIC
+    #if defined(_MSC_VER)
+        return _byteswap_ulong(n);
+    #elif defined(__GNUC__) || defined(__clang__)
+        #if defined(MA_ARM) && (defined(__ARM_ARCH) && __ARM_ARCH >= 6) && !defined(MA_64BIT)   /* <-- 64-bit inline assembly has not been tested, so disabling for now. */
+            /* Inline assembly optimized implementation for ARM. In my testing, GCC does not generate optimized code with __builtin_bswap32(). */
+            ma_uint32 r;
+            __asm__ __volatile__ (
+            #if defined(MA_64BIT)
+                "rev %w[out], %w[in]" : [out]"=r"(r) : [in]"r"(n)   /* <-- This is untested. If someone in the community could test this, that would be appreciated! */
+            #else
+                "rev %[out], %[in]" : [out]"=r"(r) : [in]"r"(n)
+            #endif
+            );
+            return r;
+        #else
+            return __builtin_bswap32(n);
+        #endif
+    #else
+        #error "This compiler does not support the byte swap intrinsic."
+    #endif
+#else
+    return ((n & 0xFF000000) >> 24) |
+           ((n & 0x00FF0000) >>  8) |
+           ((n & 0x0000FF00) <<  8) |
+           ((n & 0x000000FF) << 24);
+#endif
+}
+
 
 
 #ifndef MA_COINIT_VALUE
@@ -7244,7 +7389,6 @@ static MA_INLINE float ma_mix_f32_fast(float x, float y, float a)
     /*return x + (y - x)*a;*/
 }
 
-
 #if defined(MA_SUPPORT_SSE2)
 static MA_INLINE __m128 ma_mix_f32_fast__sse2(__m128 x, __m128 y, __m128 a)
 {
@@ -7448,11 +7592,15 @@ static MA_INLINE ma_int32 ma_dither_s32(ma_dither_mode ditherMode, ma_int32 dith
 }
 
 
-/******************************************************************************
+/**************************************************************************************************************************************************************
 
 Atomics
 
-******************************************************************************/
+ma_atomic_increment/decrement_*() takes a pointer to the variable being incremented and returns the new value. Usage:
+
+    ma_uint32 newValue = ma_atomic_increment_32(&theValueToIncrement);
+
+**************************************************************************************************************************************************************/
 #if defined(__clang__)
     #if defined(__has_builtin)
         #if __has_builtin(__sync_swap)
@@ -7466,25 +7614,33 @@ Atomics
 #endif
 
 #if defined(_WIN32) && !defined(__GNUC__) && !defined(__clang__)
-#define ma_memory_barrier()             MemoryBarrier()
-#define ma_atomic_exchange_32(a, b)     InterlockedExchange((LONG*)a, (LONG)b)
-#define ma_atomic_exchange_64(a, b)     InterlockedExchange64((LONGLONG*)a, (LONGLONG)b)
-#define ma_atomic_increment_32(a)       InterlockedIncrement((LONG*)a)
-#define ma_atomic_decrement_32(a)       InterlockedDecrement((LONG*)a)
+#define ma_memory_barrier()              MemoryBarrier()
+#define ma_atomic_exchange_32(a, b)      InterlockedExchange((LONG*)a, (LONG)b)
+#define ma_atomic_exchange_64(a, b)      InterlockedExchange64((LONGLONG*)a, (LONGLONG)b)
+#define ma_atomic_increment_32(a)        InterlockedIncrement((LONG*)a)
+#define ma_atomic_decrement_32(a)        InterlockedDecrement((LONG*)a)
+#define ma_compare_and_swap_16(d, e, c)  _InterlockedCompareExchange16((short*)d, (short)e, (short)c)
+#define ma_compare_and_swap_32(d, e, c)  _InterlockedCompareExchange((LONG*)d, (LONG)e, (LONG)c)
+#define ma_compare_and_swap_64(d, e, c)  _InterlockedCompareExchange64((LONGLONG*)d, (LONGLONG)e, (LONGLONG)c)
+#define ma_compare_and_swap_ptr(d, e, c) _InterlockedCompareExchangePointer((void*volatile*)d, (void*)e, (void*)c)
 #else
-#define ma_memory_barrier()             __sync_synchronize()
+#define ma_memory_barrier()              __sync_synchronize()
 #if defined(MA_HAS_SYNC_SWAP)
-    #define ma_atomic_exchange_32(a, b) __sync_swap(a, b)
-    #define ma_atomic_exchange_64(a, b) __sync_swap(a, b)
+    #define ma_atomic_exchange_32(a, b)  __sync_swap(a, b)
+    #define ma_atomic_exchange_64(a, b)  __sync_swap(a, b)
 #elif defined(MA_HAS_GNUC_ATOMICS)
-    #define ma_atomic_exchange_32(a, b) (void)__atomic_exchange_n(a, b, __ATOMIC_ACQ_REL)
-    #define ma_atomic_exchange_64(a, b) (void)__atomic_exchange_n(a, b, __ATOMIC_ACQ_REL)
+    #define ma_atomic_exchange_32(a, b)  (void)__atomic_exchange_n(a, b, __ATOMIC_ACQ_REL)
+    #define ma_atomic_exchange_64(a, b)  (void)__atomic_exchange_n(a, b, __ATOMIC_ACQ_REL)
 #else
-    #define ma_atomic_exchange_32(a, b) __sync_synchronize(); (void)__sync_lock_test_and_set(a, b)
-    #define ma_atomic_exchange_64(a, b) __sync_synchronize(); (void)__sync_lock_test_and_set(a, b)
+    #define ma_atomic_exchange_32(a, b)  __sync_synchronize(); (void)__sync_lock_test_and_set(a, b)
+    #define ma_atomic_exchange_64(a, b)  __sync_synchronize(); (void)__sync_lock_test_and_set(a, b)
 #endif
-#define ma_atomic_increment_32(a)       __sync_add_and_fetch(a, 1)
-#define ma_atomic_decrement_32(a)       __sync_sub_and_fetch(a, 1)
+#define ma_atomic_increment_32(a)        __sync_add_and_fetch(a, 1)
+#define ma_atomic_decrement_32(a)        __sync_sub_and_fetch(a, 1)
+#define ma_compare_and_swap_16(d, e, c)  __sync_val_compare_and_swap(d, c, e)
+#define ma_compare_and_swap_32(d, e, c)  __sync_val_compare_and_swap(d, c, e)
+#define ma_compare_and_swap_64(d, e, c)  __sync_val_compare_and_swap(d, c, e)
+#define ma_compare_and_swap_ptr(d, e, c) __sync_val_compare_and_swap(d, c, e)
 #endif
 
 #ifdef MA_64BIT
@@ -7626,6 +7782,10 @@ MA_API ma_uint64 ma_calculate_frame_count_after_resampling(ma_uint32 sampleRateO
     ma_resampler_config config;
     ma_resampler resampler;
 
+    if (sampleRateOut == sampleRateIn) {
+        return frameCountIn;
+    }
+
     config = ma_resampler_config_init(ma_format_s16, 1, sampleRateIn, sampleRateOut, ma_resample_algorithm_linear);
     result = ma_resampler_init(&config, &resampler);
     if (result != MA_SUCCESS) {
@@ -7641,6 +7801,733 @@ MA_API ma_uint64 ma_calculate_frame_count_after_resampling(ma_uint32 sampleRateO
 #ifndef MA_DATA_CONVERTER_STACK_BUFFER_SIZE
 #define MA_DATA_CONVERTER_STACK_BUFFER_SIZE     4096
 #endif
+
+
+
+#if defined(MA_WIN32)
+static ma_result ma_result_from_GetLastError(DWORD error)
+{
+    switch (error)
+    {
+        case ERROR_SUCCESS:             return MA_SUCCESS;
+        case ERROR_PATH_NOT_FOUND:      return MA_DOES_NOT_EXIST;
+        case ERROR_TOO_MANY_OPEN_FILES: return MA_TOO_MANY_OPEN_FILES;
+        case ERROR_NOT_ENOUGH_MEMORY:   return MA_OUT_OF_MEMORY;
+        case ERROR_DISK_FULL:           return MA_NO_SPACE;
+        case ERROR_HANDLE_EOF:          return MA_END_OF_FILE;
+        case ERROR_NEGATIVE_SEEK:       return MA_BAD_SEEK;
+        case ERROR_INVALID_PARAMETER:   return MA_INVALID_ARGS;
+        case ERROR_ACCESS_DENIED:       return MA_ACCESS_DENIED;
+        case ERROR_SEM_TIMEOUT:         return MA_TIMEOUT;
+        case ERROR_FILE_NOT_FOUND:      return MA_DOES_NOT_EXIST;
+        default: break;
+    }
+
+    return MA_ERROR;
+}
+#endif  /* MA_WIN32 */
+
+
+/*******************************************************************************
+
+Threading
+
+*******************************************************************************/
+#ifdef MA_WIN32
+    #define MA_THREADCALL WINAPI
+    typedef unsigned long ma_thread_result;
+#else
+    #define MA_THREADCALL
+    typedef void* ma_thread_result;
+#endif
+typedef ma_thread_result (MA_THREADCALL * ma_thread_entry_proc)(void* pData);
+
+#ifdef MA_WIN32
+static int ma_thread_priority_to_win32(ma_thread_priority priority)
+{
+    switch (priority) {
+        case ma_thread_priority_idle:     return THREAD_PRIORITY_IDLE;
+        case ma_thread_priority_lowest:   return THREAD_PRIORITY_LOWEST;
+        case ma_thread_priority_low:      return THREAD_PRIORITY_BELOW_NORMAL;
+        case ma_thread_priority_normal:   return THREAD_PRIORITY_NORMAL;
+        case ma_thread_priority_high:     return THREAD_PRIORITY_ABOVE_NORMAL;
+        case ma_thread_priority_highest:  return THREAD_PRIORITY_HIGHEST;
+        case ma_thread_priority_realtime: return THREAD_PRIORITY_TIME_CRITICAL;
+        default:                          return THREAD_PRIORITY_NORMAL;
+    }
+}
+
+static ma_result ma_thread_create__win32(ma_thread* pThread, ma_thread_priority priority, size_t stackSize, ma_thread_entry_proc entryProc, void* pData)
+{
+    *pThread = CreateThread(NULL, stackSize, entryProc, pData, 0, NULL);
+    if (*pThread == NULL) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    SetThreadPriority((HANDLE)*pThread, ma_thread_priority_to_win32(priority));
+
+    return MA_SUCCESS;
+}
+
+static void ma_thread_wait__win32(ma_thread* pThread)
+{
+    WaitForSingleObject((HANDLE)*pThread, INFINITE);
+}
+
+static void ma_sleep__win32(ma_uint32 milliseconds)
+{
+    Sleep((DWORD)milliseconds);
+}
+
+
+static ma_result ma_mutex_init__win32(ma_mutex* pMutex)
+{
+    *pMutex = CreateEventW(NULL, FALSE, TRUE, NULL);
+    if (*pMutex == NULL) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_mutex_uninit__win32(ma_mutex* pMutex)
+{
+    CloseHandle((HANDLE)*pMutex);
+}
+
+static void ma_mutex_lock__win32(ma_mutex* pMutex)
+{
+    WaitForSingleObject((HANDLE)*pMutex, INFINITE);
+}
+
+static void ma_mutex_unlock__win32(ma_mutex* pMutex)
+{
+    SetEvent((HANDLE)*pMutex);
+}
+
+
+static ma_result ma_event_init__win32(ma_event* pEvent)
+{
+    *pEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+    if (*pEvent == NULL) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_event_uninit__win32(ma_event* pEvent)
+{
+    CloseHandle((HANDLE)*pEvent);
+}
+
+static ma_result ma_event_wait__win32(ma_event* pEvent)
+{
+    DWORD result = WaitForSingleObject((HANDLE)*pEvent, INFINITE);
+    if (result == WAIT_OBJECT_0) {
+        return MA_SUCCESS;
+    }
+
+    if (result == WAIT_TIMEOUT) {
+        return MA_TIMEOUT;
+    }
+
+    return ma_result_from_GetLastError(GetLastError());
+}
+
+static ma_result ma_event_signal__win32(ma_event* pEvent)
+{
+    BOOL result = SetEvent((HANDLE)*pEvent);
+    if (result == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+
+static ma_result ma_semaphore_init__win32(int initialValue, ma_semaphore* pSemaphore)
+{
+    *pSemaphore = CreateSemaphoreW(NULL, (LONG)initialValue, LONG_MAX, NULL);
+    if (*pSemaphore == NULL) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_semaphore_uninit__win32(ma_semaphore* pSemaphore)
+{
+    CloseHandle((HANDLE)*pSemaphore);
+}
+
+static ma_result ma_semaphore_wait__win32(ma_semaphore* pSemaphore)
+{
+    DWORD result = WaitForSingleObject((HANDLE)*pSemaphore, INFINITE);
+    if (result == WAIT_OBJECT_0) {
+        return MA_SUCCESS;
+    }
+
+    if (result == WAIT_TIMEOUT) {
+        return MA_TIMEOUT;
+    }
+
+    return ma_result_from_GetLastError(GetLastError());
+}
+
+static ma_result ma_semaphore_release__win32(ma_semaphore* pSemaphore)
+{
+    BOOL result = ReleaseSemaphore((HANDLE)*pSemaphore, 1, NULL);
+    if (result == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+#endif
+
+
+#ifdef MA_POSIX
+#include <sched.h>
+#include <sys/time.h>
+
+static ma_result ma_thread_create__posix(ma_thread* pThread, ma_thread_priority priority, size_t stackSize, ma_thread_entry_proc entryProc, void* pData)
+{
+    int result;
+    pthread_attr_t* pAttr = NULL;
+
+#if !defined(__EMSCRIPTEN__)
+    /* Try setting the thread priority. It's not critical if anything fails here. */
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) == 0) {
+        int scheduler = -1;
+        if (priority == ma_thread_priority_idle) {
+#ifdef SCHED_IDLE
+            if (pthread_attr_setschedpolicy(&attr, SCHED_IDLE) == 0) {
+                scheduler = SCHED_IDLE;
+            }
+#endif
+        } else if (priority == ma_thread_priority_realtime) {
+#ifdef SCHED_FIFO
+            if (pthread_attr_setschedpolicy(&attr, SCHED_FIFO) == 0) {
+                scheduler = SCHED_FIFO;
+            }
+#endif
+#ifdef MA_LINUX
+        } else {
+            scheduler = sched_getscheduler(0);
+#endif
+        }
+
+        if (stackSize > 0) {
+            pthread_attr_setstacksize(&attr, stackSize);
+        }
+
+        if (scheduler != -1) {
+            int priorityMin = sched_get_priority_min(scheduler);
+            int priorityMax = sched_get_priority_max(scheduler);
+            int priorityStep = (priorityMax - priorityMin) / 7;  /* 7 = number of priorities supported by miniaudio. */
+
+            struct sched_param sched;
+            if (pthread_attr_getschedparam(&attr, &sched) == 0) {
+                if (priority == ma_thread_priority_idle) {
+                    sched.sched_priority = priorityMin;
+                } else if (priority == ma_thread_priority_realtime) {
+                    sched.sched_priority = priorityMax;
+                } else {
+                    sched.sched_priority += ((int)priority + 5) * priorityStep;  /* +5 because the lowest priority is -5. */
+                    if (sched.sched_priority < priorityMin) {
+                        sched.sched_priority = priorityMin;
+                    }
+                    if (sched.sched_priority > priorityMax) {
+                        sched.sched_priority = priorityMax;
+                    }
+                }
+
+                if (pthread_attr_setschedparam(&attr, &sched) == 0) {
+                    pAttr = &attr;
+                }
+            }
+        }
+
+        pthread_attr_destroy(&attr);
+    }
+#endif
+
+    result = pthread_create(pThread, pAttr, entryProc, pData);
+    if (result != 0) {
+        return ma_result_from_errno(result);
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_thread_wait__posix(ma_thread* pThread)
+{
+    pthread_join(*pThread, NULL);
+}
+
+#if !defined(MA_EMSCRIPTEN)
+static void ma_sleep__posix(ma_uint32 milliseconds)
+{
+#ifdef MA_EMSCRIPTEN
+    (void)milliseconds;
+    MA_ASSERT(MA_FALSE);  /* The Emscripten build should never sleep. */
+#else
+    #if _POSIX_C_SOURCE >= 199309L
+        struct timespec ts;
+        ts.tv_sec  = milliseconds / 1000;
+        ts.tv_nsec = milliseconds % 1000 * 1000000;
+        nanosleep(&ts, NULL);
+    #else
+        struct timeval tv;
+        tv.tv_sec  = milliseconds / 1000;
+        tv.tv_usec = milliseconds % 1000 * 1000;
+        select(0, NULL, NULL, NULL, &tv);
+    #endif
+#endif
+}
+#endif  /* MA_EMSCRIPTEN */
+
+
+static ma_result ma_mutex_init__posix(ma_mutex* pMutex)
+{
+    int result = pthread_mutex_init((pthread_mutex_t*)pMutex, NULL);
+    if (result != 0) {
+        return ma_result_from_errno(result);
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_mutex_uninit__posix(ma_mutex* pMutex)
+{
+    pthread_mutex_destroy((pthread_mutex_t*)pMutex);
+}
+
+static void ma_mutex_lock__posix(ma_mutex* pMutex)
+{
+    pthread_mutex_lock((pthread_mutex_t*)pMutex);
+}
+
+static void ma_mutex_unlock__posix(ma_mutex* pMutex)
+{
+    pthread_mutex_unlock((pthread_mutex_t*)pMutex);
+}
+
+
+static ma_result ma_event_init__posix(ma_event* pEvent)
+{
+    int result;
+
+    result = pthread_mutex_init(&pEvent->lock, NULL);
+    if (result != 0) {
+        return ma_result_from_errno(result);
+    }
+
+    result = pthread_cond_init(&pEvent->cond, NULL);
+    if (result != 0) {
+        pthread_mutex_destroy(&pEvent->lock);
+        return ma_result_from_errno(result);
+    }
+
+    pEvent->value = 0;
+    return MA_SUCCESS;
+}
+
+static void ma_event_uninit__posix(ma_event* pEvent)
+{
+    pthread_cond_destroy(&pEvent->cond);
+    pthread_mutex_destroy(&pEvent->lock);
+}
+
+static ma_result ma_event_wait__posix(ma_event* pEvent)
+{
+    pthread_mutex_lock(&pEvent->lock);
+    {
+        while (pEvent->value == 0) {
+            pthread_cond_wait(&pEvent->cond, &pEvent->lock);
+        }
+        pEvent->value = 0;  /* Auto-reset. */
+    }
+    pthread_mutex_unlock(&pEvent->lock);
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_event_signal__posix(ma_event* pEvent)
+{
+    pthread_mutex_lock(&pEvent->lock);
+    {
+        pEvent->value = 1;
+        pthread_cond_signal(&pEvent->cond);
+    }
+    pthread_mutex_unlock(&pEvent->lock);
+
+    return MA_SUCCESS;
+}
+
+
+static ma_result ma_semaphore_init__posix(int initialValue, ma_semaphore* pSemaphore)
+{
+    int result;
+
+    if (pSemaphore == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    pSemaphore->value = initialValue;
+
+    result = pthread_mutex_init(&pSemaphore->lock, NULL);
+    if (result != 0) {
+        return ma_result_from_errno(result);  /* Failed to create mutex. */
+    }
+
+    result = pthread_cond_init(&pSemaphore->cond, NULL);
+    if (result != 0) {
+        pthread_mutex_destroy(&pSemaphore->lock);
+        return ma_result_from_errno(result);  /* Failed to create condition variable. */
+    }
+
+    return MA_SUCCESS;
+}
+
+static void ma_semaphore_uninit__posix(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        return;
+    }
+
+    pthread_cond_destroy(&pSemaphore->cond);
+    pthread_mutex_destroy(&pSemaphore->lock);
+}
+
+static ma_result ma_semaphore_wait__posix(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    pthread_mutex_lock(&pSemaphore->lock);
+    {
+        /* We need to wait on a condition variable before escaping. We can't return from this function until the semaphore has been signaled. */
+        while (pSemaphore->value == 0) {
+            pthread_cond_wait(&pSemaphore->cond, &pSemaphore->lock);
+        }
+
+        pSemaphore->value -= 1;
+    }
+    pthread_mutex_unlock(&pSemaphore->lock);
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_semaphore_release__posix(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    pthread_mutex_lock(&pSemaphore->lock);
+    {
+        pSemaphore->value += 1;
+        pthread_cond_signal(&pSemaphore->cond);
+    }
+    pthread_mutex_unlock(&pSemaphore->lock);
+
+    return MA_SUCCESS;
+}
+#endif
+
+static ma_result ma_thread_create(ma_thread* pThread, ma_thread_priority priority, size_t stackSize, ma_thread_entry_proc entryProc, void* pData)
+{
+    if (pThread == NULL || entryProc == NULL) {
+        return MA_FALSE;
+    }
+
+#ifdef MA_WIN32
+    return ma_thread_create__win32(pThread, priority, stackSize, entryProc, pData);
+#endif
+#ifdef MA_POSIX
+    return ma_thread_create__posix(pThread, priority, stackSize, entryProc, pData);
+#endif
+}
+
+static void ma_thread_wait(ma_thread* pThread)
+{
+    if (pThread == NULL) {
+        return;
+    }
+
+#ifdef MA_WIN32
+    ma_thread_wait__win32(pThread);
+#endif
+#ifdef MA_POSIX
+    ma_thread_wait__posix(pThread);
+#endif
+}
+
+#if !defined(MA_EMSCRIPTEN)
+static void ma_sleep(ma_uint32 milliseconds)
+{
+#ifdef MA_WIN32
+    ma_sleep__win32(milliseconds);
+#endif
+#ifdef MA_POSIX
+    ma_sleep__posix(milliseconds);
+#endif
+}
+#endif
+
+#if !defined(MA_EMSCRIPTEN)
+static MA_INLINE void ma_yield()
+{
+#if defined(__i386) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
+    /* x86/x64 */
+    #if defined(_MSC_VER) && !defined(__clang__)
+        #if _MSC_VER >= 1400
+            _mm_pause();
+        #else
+            __asm pause;
+        #endif
+    #else
+        __asm__ __volatile__ ("pause");
+    #endif
+#elif (defined(__arm__) && defined(__ARM_ARCH) && __ARM_ARCH >= 6) || (defined(_M_ARM) && _M_ARM >= 6)
+    /* ARM */
+    #if defined(_MSC_VER)
+        /* Apparently there is a __yield() intrinsic that's compatible with ARM, but I cannot find documentation for it nor can I find where it's declared. */
+        __yield();
+    #else
+        __asm__ __volatile__ ("yield");
+    #endif
+#else
+    /* Unknown or unsupported architecture. No-op. */
+#endif
+}
+#endif
+
+
+MA_API ma_result ma_mutex_init(ma_mutex* pMutex)
+{
+    if (pMutex == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_mutex_init__win32(pMutex);
+#endif
+#ifdef MA_POSIX
+    return ma_mutex_init__posix(pMutex);
+#endif
+}
+
+MA_API void ma_mutex_uninit(ma_mutex* pMutex)
+{
+    if (pMutex == NULL) {
+        return;
+    }
+
+#ifdef MA_WIN32
+    ma_mutex_uninit__win32(pMutex);
+#endif
+#ifdef MA_POSIX
+    ma_mutex_uninit__posix(pMutex);
+#endif
+}
+
+MA_API void ma_mutex_lock(ma_mutex* pMutex)
+{
+    if (pMutex == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return;
+    }
+
+#ifdef MA_WIN32
+    ma_mutex_lock__win32(pMutex);
+#endif
+#ifdef MA_POSIX
+    ma_mutex_lock__posix(pMutex);
+#endif
+}
+
+MA_API void ma_mutex_unlock(ma_mutex* pMutex)
+{
+    if (pMutex == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return;
+}
+
+#ifdef MA_WIN32
+    ma_mutex_unlock__win32(pMutex);
+#endif
+#ifdef MA_POSIX
+    ma_mutex_unlock__posix(pMutex);
+#endif
+}
+
+
+MA_API ma_result ma_event_init(ma_event* pEvent)
+{
+    if (pEvent == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_event_init__win32(pEvent);
+#endif
+#ifdef MA_POSIX
+    return ma_event_init__posix(pEvent);
+#endif
+}
+
+#if 0
+static ma_result ma_event_alloc_and_init(ma_event** ppEvent, ma_allocation_callbacks* pAllocationCallbacks)
+{
+    ma_result result;
+    ma_event* pEvent;
+
+    if (ppEvent == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *ppEvent = NULL;
+
+    pEvent = ma_malloc(sizeof(*pEvent), pAllocationCallbacks/*, MA_ALLOCATION_TYPE_EVENT*/);
+    if (pEvent == NULL) {
+        return MA_OUT_OF_MEMORY;
+    }
+
+    result = ma_event_init(pEvent);
+    if (result != MA_SUCCESS) {
+        ma_free(pEvent, pAllocationCallbacks/*, MA_ALLOCATION_TYPE_EVENT*/);
+        return result;
+    }
+
+    *ppEvent = pEvent;
+    return result;
+}
+#endif
+
+MA_API void ma_event_uninit(ma_event* pEvent)
+{
+    if (pEvent == NULL) {
+        return;
+    }
+
+#ifdef MA_WIN32
+    ma_event_uninit__win32(pEvent);
+#endif
+#ifdef MA_POSIX
+    ma_event_uninit__posix(pEvent);
+#endif
+}
+
+#if 0
+static void ma_event_uninit_and_free(ma_event* pEvent, ma_allocation_callbacks* pAllocationCallbacks)
+{
+    if (pEvent == NULL) {
+        return;
+    }
+
+    ma_event_uninit(pEvent);
+    ma_free(pEvent, pAllocationCallbacks/*, MA_ALLOCATION_TYPE_EVENT*/);
+}
+#endif
+
+MA_API ma_result ma_event_wait(ma_event* pEvent)
+{
+    if (pEvent == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_event_wait__win32(pEvent);
+#endif
+#ifdef MA_POSIX
+    return ma_event_wait__posix(pEvent);
+#endif
+}
+
+MA_API ma_result ma_event_signal(ma_event* pEvent)
+{
+    if (pEvent == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_event_signal__win32(pEvent);
+#endif
+#ifdef MA_POSIX
+    return ma_event_signal__posix(pEvent);
+#endif
+}
+
+
+MA_API ma_result ma_semaphore_init(int initialValue, ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_semaphore_init__win32(initialValue, pSemaphore);
+#endif
+#ifdef MA_POSIX
+    return ma_semaphore_init__posix(initialValue, pSemaphore);
+#endif
+}
+
+MA_API void ma_semaphore_uninit(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return;
+    }
+
+#ifdef MA_WIN32
+    ma_semaphore_uninit__win32(pSemaphore);
+#endif
+#ifdef MA_POSIX
+    ma_semaphore_uninit__posix(pSemaphore);
+#endif
+}
+
+MA_API ma_result ma_semaphore_wait(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_semaphore_wait__win32(pSemaphore);
+#endif
+#ifdef MA_POSIX
+    return ma_semaphore_wait__posix(pSemaphore);
+#endif
+}
+
+MA_API ma_result ma_semaphore_release(ma_semaphore* pSemaphore)
+{
+    if (pSemaphore == NULL) {
+        MA_ASSERT(MA_FALSE);    /* Fire an assert to the caller is aware of this bug. */
+        return MA_INVALID_ARGS;
+    }
+
+#ifdef MA_WIN32
+    return ma_semaphore_release__win32(pSemaphore);
+#endif
+#ifdef MA_POSIX
+    return ma_semaphore_release__posix(pSemaphore);
+#endif
+}
+
 
 /************************************************************************************************************************************************************
 *************************************************************************************************************************************************************
@@ -7662,7 +8549,6 @@ DEVICE I/O
 #endif
 
 #ifdef MA_POSIX
-    #include <sys/time.h>
     #include <sys/types.h>
     #include <unistd.h>
     #include <dlfcn.h>
@@ -7799,36 +8685,6 @@ MA_API ma_bool32 ma_is_loopback_supported(ma_backend backend)
 
 
 #ifdef MA_WIN32
-    #define MA_THREADCALL WINAPI
-    typedef unsigned long ma_thread_result;
-#else
-    #define MA_THREADCALL
-    typedef void* ma_thread_result;
-#endif
-typedef ma_thread_result (MA_THREADCALL * ma_thread_entry_proc)(void* pData);
-
-#ifdef MA_WIN32
-static ma_result ma_result_from_GetLastError(DWORD error)
-{
-    switch (error)
-    {
-        case ERROR_SUCCESS:             return MA_SUCCESS;
-        case ERROR_PATH_NOT_FOUND:      return MA_DOES_NOT_EXIST;
-        case ERROR_TOO_MANY_OPEN_FILES: return MA_TOO_MANY_OPEN_FILES;
-        case ERROR_NOT_ENOUGH_MEMORY:   return MA_OUT_OF_MEMORY;
-        case ERROR_DISK_FULL:           return MA_NO_SPACE;
-        case ERROR_HANDLE_EOF:          return MA_END_OF_FILE;
-        case ERROR_NEGATIVE_SEEK:       return MA_BAD_SEEK;
-        case ERROR_INVALID_PARAMETER:   return MA_INVALID_ARGS;
-        case ERROR_ACCESS_DENIED:       return MA_ACCESS_DENIED;
-        case ERROR_SEM_TIMEOUT:         return MA_TIMEOUT;
-        case ERROR_FILE_NOT_FOUND:      return MA_DOES_NOT_EXIST;
-        default: break;
-    }
-
-    return MA_ERROR;
-}
-
 /* WASAPI error codes. */
 #define MA_AUDCLNT_E_NOT_INITIALIZED              ((HRESULT)0x88890001)
 #define MA_AUDCLNT_E_ALREADY_INITIALIZED          ((HRESULT)0x88890002)
@@ -8036,6 +8892,11 @@ static void ma_post_log_message(ma_context* pContext, ma_device* pDevice, ma_uin
         }
     }
 
+    /* All logs must be output when debug output is enabled. */
+#if defined(MA_DEBUG_OUTPUT)
+    printf("%s: %s\n", ma_log_level_to_string(logLevel), message);
+#endif
+
     if (pContext == NULL) {
         return;
     }
@@ -8044,12 +8905,6 @@ static void ma_post_log_message(ma_context* pContext, ma_device* pDevice, ma_uin
     if (logLevel <= MA_LOG_LEVEL) {
         ma_log_proc onLog;
 
-    #if defined(MA_DEBUG_OUTPUT)
-        if (logLevel <= MA_LOG_LEVEL) {
-            printf("%s: %s\n", ma_log_level_to_string(logLevel), message);
-        }
-    #endif
-    
         onLog = pContext->logCallback;
         if (onLog) {
             onLog(pContext, pDevice, logLevel, message);
@@ -8403,578 +9258,6 @@ MA_API ma_proc ma_dlsym(ma_context* pContext, ma_handle handle, const char* symb
 }
 
 
-/*******************************************************************************
-
-Threading
-
-*******************************************************************************/
-#ifdef MA_WIN32
-static int ma_thread_priority_to_win32(ma_thread_priority priority)
-{
-    switch (priority) {
-        case ma_thread_priority_idle:     return THREAD_PRIORITY_IDLE;
-        case ma_thread_priority_lowest:   return THREAD_PRIORITY_LOWEST;
-        case ma_thread_priority_low:      return THREAD_PRIORITY_BELOW_NORMAL;
-        case ma_thread_priority_normal:   return THREAD_PRIORITY_NORMAL;
-        case ma_thread_priority_high:     return THREAD_PRIORITY_ABOVE_NORMAL;
-        case ma_thread_priority_highest:  return THREAD_PRIORITY_HIGHEST;
-        case ma_thread_priority_realtime: return THREAD_PRIORITY_TIME_CRITICAL;
-        default:                          return THREAD_PRIORITY_NORMAL;
-    }
-}
-
-static ma_result ma_thread_create__win32(ma_context* pContext, ma_thread* pThread, ma_thread_entry_proc entryProc, void* pData)
-{
-    pThread->win32.hThread = CreateThread(NULL, 0, entryProc, pData, 0, NULL);
-    if (pThread->win32.hThread == NULL) {
-        return ma_result_from_GetLastError(GetLastError());
-    }
-
-    SetThreadPriority((HANDLE)pThread->win32.hThread, ma_thread_priority_to_win32(pContext->threadPriority));
-
-    return MA_SUCCESS;
-}
-
-static void ma_thread_wait__win32(ma_thread* pThread)
-{
-    WaitForSingleObject(pThread->win32.hThread, INFINITE);
-}
-
-static void ma_sleep__win32(ma_uint32 milliseconds)
-{
-    Sleep((DWORD)milliseconds);
-}
-
-
-static ma_result ma_mutex_init__win32(ma_context* pContext, ma_mutex* pMutex)
-{
-    (void)pContext;
-
-    pMutex->win32.hMutex = CreateEventW(NULL, FALSE, TRUE, NULL);
-    if (pMutex->win32.hMutex == NULL) {
-        return ma_result_from_GetLastError(GetLastError());
-    }
-
-    return MA_SUCCESS;
-}
-
-static void ma_mutex_uninit__win32(ma_mutex* pMutex)
-{
-    CloseHandle(pMutex->win32.hMutex);
-}
-
-static void ma_mutex_lock__win32(ma_mutex* pMutex)
-{
-    WaitForSingleObject(pMutex->win32.hMutex, INFINITE);
-}
-
-static void ma_mutex_unlock__win32(ma_mutex* pMutex)
-{
-    SetEvent(pMutex->win32.hMutex);
-}
-
-
-static ma_result ma_event_init__win32(ma_context* pContext, ma_event* pEvent)
-{
-    (void)pContext;
-
-    pEvent->win32.hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
-    if (pEvent->win32.hEvent == NULL) {
-        return ma_result_from_GetLastError(GetLastError());
-    }
-
-    return MA_SUCCESS;
-}
-
-static void ma_event_uninit__win32(ma_event* pEvent)
-{
-    CloseHandle(pEvent->win32.hEvent);
-}
-
-static ma_bool32 ma_event_wait__win32(ma_event* pEvent)
-{
-    return WaitForSingleObject(pEvent->win32.hEvent, INFINITE) == WAIT_OBJECT_0;
-}
-
-static ma_bool32 ma_event_signal__win32(ma_event* pEvent)
-{
-    return SetEvent(pEvent->win32.hEvent);
-}
-
-
-static ma_result ma_semaphore_init__win32(ma_context* pContext, int initialValue, ma_semaphore* pSemaphore)
-{
-    (void)pContext;
-
-    pSemaphore->win32.hSemaphore = CreateSemaphoreW(NULL, (LONG)initialValue, LONG_MAX, NULL);
-    if (pSemaphore->win32.hSemaphore == NULL) {
-        return ma_result_from_GetLastError(GetLastError());
-    }
-
-    return MA_SUCCESS;
-}
-
-static void ma_semaphore_uninit__win32(ma_semaphore* pSemaphore)
-{
-    CloseHandle((HANDLE)pSemaphore->win32.hSemaphore);
-}
-
-static ma_bool32 ma_semaphore_wait__win32(ma_semaphore* pSemaphore)
-{
-    return WaitForSingleObject((HANDLE)pSemaphore->win32.hSemaphore, INFINITE) == WAIT_OBJECT_0;
-}
-
-static ma_bool32 ma_semaphore_release__win32(ma_semaphore* pSemaphore)
-{
-    return ReleaseSemaphore((HANDLE)pSemaphore->win32.hSemaphore, 1, NULL) != 0;
-}
-#endif
-
-
-#ifdef MA_POSIX
-#include <sched.h>
-
-typedef int (* ma_pthread_create_proc)(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg);
-typedef int (* ma_pthread_join_proc)(pthread_t thread, void **retval);
-typedef int (* ma_pthread_mutex_init_proc)(pthread_mutex_t *__mutex, const pthread_mutexattr_t *__mutexattr);
-typedef int (* ma_pthread_mutex_destroy_proc)(pthread_mutex_t *__mutex);
-typedef int (* ma_pthread_mutex_lock_proc)(pthread_mutex_t *__mutex);
-typedef int (* ma_pthread_mutex_unlock_proc)(pthread_mutex_t *__mutex);
-typedef int (* ma_pthread_cond_init_proc)(pthread_cond_t *__restrict __cond, const pthread_condattr_t *__restrict __cond_attr);
-typedef int (* ma_pthread_cond_destroy_proc)(pthread_cond_t *__cond);
-typedef int (* ma_pthread_cond_signal_proc)(pthread_cond_t *__cond);
-typedef int (* ma_pthread_cond_wait_proc)(pthread_cond_t *__restrict __cond, pthread_mutex_t *__restrict __mutex);
-typedef int (* ma_pthread_attr_init_proc)(pthread_attr_t *attr);
-typedef int (* ma_pthread_attr_destroy_proc)(pthread_attr_t *attr);
-typedef int (* ma_pthread_attr_setschedpolicy_proc)(pthread_attr_t *attr, int policy);
-typedef int (* ma_pthread_attr_getschedparam_proc)(const pthread_attr_t *attr, struct sched_param *param);
-typedef int (* ma_pthread_attr_setschedparam_proc)(pthread_attr_t *attr, const struct sched_param *param);
-
-static ma_result ma_thread_create__posix(ma_context* pContext, ma_thread* pThread, ma_thread_entry_proc entryProc, void* pData)
-{
-    int result;
-    pthread_attr_t* pAttr = NULL;
-
-#if !defined(__EMSCRIPTEN__)
-    /* Try setting the thread priority. It's not critical if anything fails here. */
-    pthread_attr_t attr;
-    if (((ma_pthread_attr_init_proc)pContext->posix.pthread_attr_init)(&attr) == 0) {
-        int scheduler = -1;
-        if (pContext->threadPriority == ma_thread_priority_idle) {
-#ifdef SCHED_IDLE
-            if (((ma_pthread_attr_setschedpolicy_proc)pContext->posix.pthread_attr_setschedpolicy)(&attr, SCHED_IDLE) == 0) {
-                scheduler = SCHED_IDLE;
-            }
-#endif
-        } else if (pContext->threadPriority == ma_thread_priority_realtime) {
-#ifdef SCHED_FIFO
-            if (((ma_pthread_attr_setschedpolicy_proc)pContext->posix.pthread_attr_setschedpolicy)(&attr, SCHED_FIFO) == 0) {
-                scheduler = SCHED_FIFO;
-            }
-#endif
-#ifdef MA_LINUX
-        } else {
-            scheduler = sched_getscheduler(0);
-#endif
-        }
-
-        if (scheduler != -1) {
-            int priorityMin = sched_get_priority_min(scheduler);
-            int priorityMax = sched_get_priority_max(scheduler);
-            int priorityStep = (priorityMax - priorityMin) / 7;  /* 7 = number of priorities supported by miniaudio. */
-
-            struct sched_param sched;
-            if (((ma_pthread_attr_getschedparam_proc)pContext->posix.pthread_attr_getschedparam)(&attr, &sched) == 0) {
-                if (pContext->threadPriority == ma_thread_priority_idle) {
-                    sched.sched_priority = priorityMin;
-                } else if (pContext->threadPriority == ma_thread_priority_realtime) {
-                    sched.sched_priority = priorityMax;
-                } else {
-                    sched.sched_priority += ((int)pContext->threadPriority + 5) * priorityStep;  /* +5 because the lowest priority is -5. */
-                    if (sched.sched_priority < priorityMin) {
-                        sched.sched_priority = priorityMin;
-                    }
-                    if (sched.sched_priority > priorityMax) {
-                        sched.sched_priority = priorityMax;
-                    }
-                }
-
-                if (((ma_pthread_attr_setschedparam_proc)pContext->posix.pthread_attr_setschedparam)(&attr, &sched) == 0) {
-                    pAttr = &attr;
-                }
-            }
-        }
-
-        ((ma_pthread_attr_destroy_proc)pContext->posix.pthread_attr_destroy)(&attr);
-    }
-#endif
-
-    result = ((ma_pthread_create_proc)pContext->posix.pthread_create)(&pThread->posix.thread, pAttr, entryProc, pData);
-    if (result != 0) {
-        return ma_result_from_errno(result);
-    }
-
-    return MA_SUCCESS;
-}
-
-static void ma_thread_wait__posix(ma_thread* pThread)
-{
-    ((ma_pthread_join_proc)pThread->pContext->posix.pthread_join)(pThread->posix.thread, NULL);
-}
-
-#if !defined(MA_EMSCRIPTEN)
-static void ma_sleep__posix(ma_uint32 milliseconds)
-{
-#ifdef MA_EMSCRIPTEN
-    (void)milliseconds;
-    MA_ASSERT(MA_FALSE);  /* The Emscripten build should never sleep. */
-#else
-    #if _POSIX_C_SOURCE >= 199309L
-        struct timespec ts;
-        ts.tv_sec  = milliseconds / 1000;
-        ts.tv_nsec = milliseconds % 1000 * 1000000;
-        nanosleep(&ts, NULL);
-    #else
-        struct timeval tv;
-        tv.tv_sec  = milliseconds / 1000;
-        tv.tv_usec = milliseconds % 1000 * 1000;
-        select(0, NULL, NULL, NULL, &tv);
-    #endif
-#endif
-}
-#endif  /* MA_EMSCRIPTEN */
-
-
-static ma_result ma_mutex_init__posix(ma_context* pContext, ma_mutex* pMutex)
-{
-    int result = ((ma_pthread_mutex_init_proc)pContext->posix.pthread_mutex_init)(&pMutex->posix.mutex, NULL);
-    if (result != 0) {
-        return ma_result_from_errno(result);
-    }
-
-    return MA_SUCCESS;
-}
-
-static void ma_mutex_uninit__posix(ma_mutex* pMutex)
-{
-    ((ma_pthread_mutex_destroy_proc)pMutex->pContext->posix.pthread_mutex_destroy)(&pMutex->posix.mutex);
-}
-
-static void ma_mutex_lock__posix(ma_mutex* pMutex)
-{
-    ((ma_pthread_mutex_lock_proc)pMutex->pContext->posix.pthread_mutex_lock)(&pMutex->posix.mutex);
-}
-
-static void ma_mutex_unlock__posix(ma_mutex* pMutex)
-{
-    ((ma_pthread_mutex_unlock_proc)pMutex->pContext->posix.pthread_mutex_unlock)(&pMutex->posix.mutex);
-}
-
-
-static ma_result ma_event_init__posix(ma_context* pContext, ma_event* pEvent)
-{
-    int result;
-
-    result = ((ma_pthread_mutex_init_proc)pContext->posix.pthread_mutex_init)(&pEvent->posix.mutex, NULL);
-    if (result != 0) {
-        return ma_result_from_errno(result);
-    }
-
-    result = ((ma_pthread_cond_init_proc)pContext->posix.pthread_cond_init)(&pEvent->posix.condition, NULL);
-    if (result != 0) {
-        ((ma_pthread_mutex_destroy_proc)pEvent->pContext->posix.pthread_mutex_destroy)(&pEvent->posix.mutex);
-        return ma_result_from_errno(result);
-    }
-
-    pEvent->posix.value = 0;
-    return MA_SUCCESS;
-}
-
-static void ma_event_uninit__posix(ma_event* pEvent)
-{
-    ((ma_pthread_cond_destroy_proc)pEvent->pContext->posix.pthread_cond_destroy)(&pEvent->posix.condition);
-    ((ma_pthread_mutex_destroy_proc)pEvent->pContext->posix.pthread_mutex_destroy)(&pEvent->posix.mutex);
-}
-
-static ma_bool32 ma_event_wait__posix(ma_event* pEvent)
-{
-    ((ma_pthread_mutex_lock_proc)pEvent->pContext->posix.pthread_mutex_lock)(&pEvent->posix.mutex);
-    {
-        while (pEvent->posix.value == 0) {
-            ((ma_pthread_cond_wait_proc)pEvent->pContext->posix.pthread_cond_wait)(&pEvent->posix.condition, &pEvent->posix.mutex);
-        }
-        pEvent->posix.value = 0;  /* Auto-reset. */
-    }
-    ((ma_pthread_mutex_unlock_proc)pEvent->pContext->posix.pthread_mutex_unlock)(&pEvent->posix.mutex);
-
-    return MA_TRUE;
-}
-
-static ma_bool32 ma_event_signal__posix(ma_event* pEvent)
-{
-    ((ma_pthread_mutex_lock_proc)pEvent->pContext->posix.pthread_mutex_lock)(&pEvent->posix.mutex);
-    {
-        pEvent->posix.value = 1;
-        ((ma_pthread_cond_signal_proc)pEvent->pContext->posix.pthread_cond_signal)(&pEvent->posix.condition);
-    }
-    ((ma_pthread_mutex_unlock_proc)pEvent->pContext->posix.pthread_mutex_unlock)(&pEvent->posix.mutex);
-
-    return MA_TRUE;
-}
-
-
-static ma_result ma_semaphore_init__posix(ma_context* pContext, int initialValue, ma_semaphore* pSemaphore)
-{
-    (void)pContext;
-
-#if defined(MA_APPLE)
-    /* Not yet implemented for Apple platforms since sem_init() is deprecated. Need to use a named semaphore via sem_open() instead. */
-    (void)initialValue;
-    (void)pSemaphore;
-    return MA_INVALID_OPERATION;
-#else
-    if (sem_init(&pSemaphore->posix.semaphore, 0, (unsigned int)initialValue) == 0) {
-        return ma_result_from_errno(errno);
-    }
-#endif
-
-    return MA_SUCCESS;
-}
-
-static void ma_semaphore_uninit__posix(ma_semaphore* pSemaphore)
-{
-    sem_close(&pSemaphore->posix.semaphore);
-}
-
-static ma_bool32 ma_semaphore_wait__posix(ma_semaphore* pSemaphore)
-{
-    return sem_wait(&pSemaphore->posix.semaphore) != -1;
-}
-
-static ma_bool32 ma_semaphore_release__posix(ma_semaphore* pSemaphore)
-{
-    return sem_post(&pSemaphore->posix.semaphore) != -1;
-}
-#endif
-
-static ma_result ma_thread_create(ma_context* pContext, ma_thread* pThread, ma_thread_entry_proc entryProc, void* pData)
-{
-    if (pContext == NULL || pThread == NULL || entryProc == NULL) {
-        return MA_FALSE;
-    }
-
-    pThread->pContext = pContext;
-
-#ifdef MA_WIN32
-    return ma_thread_create__win32(pContext, pThread, entryProc, pData);
-#endif
-#ifdef MA_POSIX
-    return ma_thread_create__posix(pContext, pThread, entryProc, pData);
-#endif
-}
-
-static void ma_thread_wait(ma_thread* pThread)
-{
-    if (pThread == NULL) {
-        return;
-    }
-
-#ifdef MA_WIN32
-    ma_thread_wait__win32(pThread);
-#endif
-#ifdef MA_POSIX
-    ma_thread_wait__posix(pThread);
-#endif
-}
-
-#if !defined(MA_EMSCRIPTEN)
-static void ma_sleep(ma_uint32 milliseconds)
-{
-#ifdef MA_WIN32
-    ma_sleep__win32(milliseconds);
-#endif
-#ifdef MA_POSIX
-    ma_sleep__posix(milliseconds);
-#endif
-}
-#endif
-
-
-MA_API ma_result ma_mutex_init(ma_context* pContext, ma_mutex* pMutex)
-{
-    if (pContext == NULL || pMutex == NULL) {
-        return MA_INVALID_ARGS;
-    }
-
-    pMutex->pContext = pContext;
-
-#ifdef MA_WIN32
-    return ma_mutex_init__win32(pContext, pMutex);
-#endif
-#ifdef MA_POSIX
-    return ma_mutex_init__posix(pContext, pMutex);
-#endif
-}
-
-MA_API void ma_mutex_uninit(ma_mutex* pMutex)
-{
-    if (pMutex == NULL || pMutex->pContext == NULL) {
-        return;
-    }
-
-#ifdef MA_WIN32
-    ma_mutex_uninit__win32(pMutex);
-#endif
-#ifdef MA_POSIX
-    ma_mutex_uninit__posix(pMutex);
-#endif
-}
-
-MA_API void ma_mutex_lock(ma_mutex* pMutex)
-{
-    if (pMutex == NULL || pMutex->pContext == NULL) {
-        return;
-    }
-
-#ifdef MA_WIN32
-    ma_mutex_lock__win32(pMutex);
-#endif
-#ifdef MA_POSIX
-    ma_mutex_lock__posix(pMutex);
-#endif
-}
-
-MA_API void ma_mutex_unlock(ma_mutex* pMutex)
-{
-    if (pMutex == NULL || pMutex->pContext == NULL) {
-        return;
-}
-
-#ifdef MA_WIN32
-    ma_mutex_unlock__win32(pMutex);
-#endif
-#ifdef MA_POSIX
-    ma_mutex_unlock__posix(pMutex);
-#endif
-}
-
-
-MA_API ma_result ma_event_init(ma_context* pContext, ma_event* pEvent)
-{
-    if (pContext == NULL || pEvent == NULL) {
-        return MA_FALSE;
-    }
-
-    pEvent->pContext = pContext;
-
-#ifdef MA_WIN32
-    return ma_event_init__win32(pContext, pEvent);
-#endif
-#ifdef MA_POSIX
-    return ma_event_init__posix(pContext, pEvent);
-#endif
-}
-
-MA_API void ma_event_uninit(ma_event* pEvent)
-{
-    if (pEvent == NULL || pEvent->pContext == NULL) {
-        return;
-    }
-
-#ifdef MA_WIN32
-    ma_event_uninit__win32(pEvent);
-#endif
-#ifdef MA_POSIX
-    ma_event_uninit__posix(pEvent);
-#endif
-}
-
-MA_API ma_bool32 ma_event_wait(ma_event* pEvent)
-{
-    if (pEvent == NULL || pEvent->pContext == NULL) {
-        return MA_FALSE;
-    }
-
-#ifdef MA_WIN32
-    return ma_event_wait__win32(pEvent);
-#endif
-#ifdef MA_POSIX
-    return ma_event_wait__posix(pEvent);
-#endif
-}
-
-MA_API ma_bool32 ma_event_signal(ma_event* pEvent)
-{
-    if (pEvent == NULL || pEvent->pContext == NULL) {
-        return MA_FALSE;
-    }
-
-#ifdef MA_WIN32
-    return ma_event_signal__win32(pEvent);
-#endif
-#ifdef MA_POSIX
-    return ma_event_signal__posix(pEvent);
-#endif
-}
-
-
-MA_API ma_result ma_semaphore_init(ma_context* pContext, int initialValue, ma_semaphore* pSemaphore)
-{
-    if (pContext == NULL || pSemaphore == NULL) {
-        return MA_INVALID_ARGS;
-    }
-
-#ifdef MA_WIN32
-    return ma_semaphore_init__win32(pContext, initialValue, pSemaphore);
-#endif
-#ifdef MA_POSIX
-    return ma_semaphore_init__posix(pContext, initialValue, pSemaphore);
-#endif
-}
-
-MA_API void ma_semaphore_uninit(ma_semaphore* pSemaphore)
-{
-    if (pSemaphore == NULL) {
-        return;
-    }
-
-#ifdef MA_WIN32
-    ma_semaphore_uninit__win32(pSemaphore);
-#endif
-#ifdef MA_POSIX
-    ma_semaphore_uninit__posix(pSemaphore);
-#endif
-}
-
-MA_API ma_bool32 ma_semaphore_wait(ma_semaphore* pSemaphore)
-{
-    if (pSemaphore == NULL) {
-        return MA_FALSE;
-    }
-
-#ifdef MA_WIN32
-    return ma_semaphore_wait__win32(pSemaphore);
-#endif
-#ifdef MA_POSIX
-    return ma_semaphore_wait__posix(pSemaphore);
-#endif
-}
-
-MA_API ma_bool32 ma_semaphore_release(ma_semaphore* pSemaphore)
-{
-    if (pSemaphore == NULL) {
-        return MA_FALSE;
-    }
-
-#ifdef MA_WIN32
-    return ma_semaphore_release__win32(pSemaphore);
-#endif
-#ifdef MA_POSIX
-    return ma_semaphore_release__posix(pSemaphore);
-#endif
-}
-
-
 #if 0
 static ma_uint32 ma_get_closest_standard_sample_rate(ma_uint32 sampleRateIn)
 {
@@ -9005,231 +9288,6 @@ static ma_uint32 ma_get_closest_standard_sample_rate(ma_uint32 sampleRateIn)
     return closestRate;
 }
 #endif
-
-MA_API ma_uint32 ma_scale_buffer_size(ma_uint32 baseBufferSize, float scale)
-{
-    return ma_max(1, (ma_uint32)(baseBufferSize*scale));
-}
-
-MA_API ma_uint32 ma_calculate_buffer_size_in_milliseconds_from_frames(ma_uint32 bufferSizeInFrames, ma_uint32 sampleRate)
-{
-    return bufferSizeInFrames / (sampleRate/1000);
-}
-
-MA_API ma_uint32 ma_calculate_buffer_size_in_frames_from_milliseconds(ma_uint32 bufferSizeInMilliseconds, ma_uint32 sampleRate)
-{
-    return bufferSizeInMilliseconds * (sampleRate/1000); 
-}
-
-MA_API void ma_copy_pcm_frames(void* dst, const void* src, ma_uint64 frameCount, ma_format format, ma_uint32 channels)
-{
-    ma_copy_memory_64(dst, src, frameCount * ma_get_bytes_per_frame(format, channels));
-}
-
-MA_API void ma_silence_pcm_frames(void* p, ma_uint64 frameCount, ma_format format, ma_uint32 channels)
-{
-    if (format == ma_format_u8) {
-        ma_uint64 sampleCount = frameCount * channels;
-        ma_uint64 iSample;
-        for (iSample = 0; iSample < sampleCount; iSample += 1) {
-            ((ma_uint8*)p)[iSample] = 128;
-        }
-    } else {
-        ma_zero_memory_64(p, frameCount * ma_get_bytes_per_frame(format, channels));
-    }
-}
-
-MA_API void ma_clip_samples_f32(float* p, ma_uint64 sampleCount)
-{
-    ma_uint32 iSample;
-
-    /* TODO: Research a branchless SSE implementation. */
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        p[iSample] = ma_clip_f32(p[iSample]);
-    }
-}
-
-
-MA_API void ma_copy_and_apply_volume_factor_u8(ma_uint8* pSamplesOut, const ma_uint8* pSamplesIn, ma_uint32 sampleCount, float factor)
-{
-    ma_uint32 iSample;
-
-    if (pSamplesOut == NULL || pSamplesIn == NULL) {
-        return;
-    }
-
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        pSamplesOut[iSample] = (ma_uint8)(pSamplesIn[iSample] * factor);
-    }
-}
-
-MA_API void ma_copy_and_apply_volume_factor_s16(ma_int16* pSamplesOut, const ma_int16* pSamplesIn, ma_uint32 sampleCount, float factor)
-{
-    ma_uint32 iSample;
-
-    if (pSamplesOut == NULL || pSamplesIn == NULL) {
-        return;
-    }
-
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        pSamplesOut[iSample] = (ma_int16)(pSamplesIn[iSample] * factor);
-    }
-}
-
-MA_API void ma_copy_and_apply_volume_factor_s24(void* pSamplesOut, const void* pSamplesIn, ma_uint32 sampleCount, float factor)
-{
-    ma_uint32 iSample;
-    ma_uint8* pSamplesOut8;
-    ma_uint8* pSamplesIn8;
-
-    if (pSamplesOut == NULL || pSamplesIn == NULL) {
-        return;
-    }
-
-    pSamplesOut8 = (ma_uint8*)pSamplesOut;
-    pSamplesIn8  = (ma_uint8*)pSamplesIn;
-
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        ma_int32 sampleS32;
-
-        sampleS32 = (ma_int32)(((ma_uint32)(pSamplesIn8[iSample*3+0]) << 8) | ((ma_uint32)(pSamplesIn8[iSample*3+1]) << 16) | ((ma_uint32)(pSamplesIn8[iSample*3+2])) << 24);
-        sampleS32 = (ma_int32)(sampleS32 * factor);
-
-        pSamplesOut8[iSample*3+0] = (ma_uint8)(((ma_uint32)sampleS32 & 0x0000FF00) >>  8);
-        pSamplesOut8[iSample*3+1] = (ma_uint8)(((ma_uint32)sampleS32 & 0x00FF0000) >> 16);
-        pSamplesOut8[iSample*3+2] = (ma_uint8)(((ma_uint32)sampleS32 & 0xFF000000) >> 24);
-    }
-}
-
-MA_API void ma_copy_and_apply_volume_factor_s32(ma_int32* pSamplesOut, const ma_int32* pSamplesIn, ma_uint32 sampleCount, float factor)
-{
-    ma_uint32 iSample;
-
-    if (pSamplesOut == NULL || pSamplesIn == NULL) {
-        return;
-    }
-
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        pSamplesOut[iSample] = (ma_int32)(pSamplesIn[iSample] * factor);
-    }
-}
-
-MA_API void ma_copy_and_apply_volume_factor_f32(float* pSamplesOut, const float* pSamplesIn, ma_uint32 sampleCount, float factor)
-{
-    ma_uint32 iSample;
-
-    if (pSamplesOut == NULL || pSamplesIn == NULL) {
-        return;
-    }
-
-    for (iSample = 0; iSample < sampleCount; iSample += 1) {
-        pSamplesOut[iSample] = pSamplesIn[iSample] * factor;
-    }
-}
-
-MA_API void ma_apply_volume_factor_u8(ma_uint8* pSamples, ma_uint32 sampleCount, float factor)
-{
-    ma_copy_and_apply_volume_factor_u8(pSamples, pSamples, sampleCount, factor);
-}
-
-MA_API void ma_apply_volume_factor_s16(ma_int16* pSamples, ma_uint32 sampleCount, float factor)
-{
-    ma_copy_and_apply_volume_factor_s16(pSamples, pSamples, sampleCount, factor);
-}
-
-MA_API void ma_apply_volume_factor_s24(void* pSamples, ma_uint32 sampleCount, float factor)
-{
-    ma_copy_and_apply_volume_factor_s24(pSamples, pSamples, sampleCount, factor);
-}
-
-MA_API void ma_apply_volume_factor_s32(ma_int32* pSamples, ma_uint32 sampleCount, float factor)
-{
-    ma_copy_and_apply_volume_factor_s32(pSamples, pSamples, sampleCount, factor);
-}
-
-MA_API void ma_apply_volume_factor_f32(float* pSamples, ma_uint32 sampleCount, float factor)
-{
-    ma_copy_and_apply_volume_factor_f32(pSamples, pSamples, sampleCount, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames_u8(ma_uint8* pPCMFramesOut, const ma_uint8* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_u8(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s16(ma_int16* pPCMFramesOut, const ma_int16* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_s16(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s24(void* pPCMFramesOut, const void* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_s24(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s32(ma_int32* pPCMFramesOut, const ma_int32* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_s32(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames_f32(float* pPCMFramesOut, const float* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_f32(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
-}
-
-MA_API void ma_copy_and_apply_volume_factor_pcm_frames(void* pPCMFramesOut, const void* pPCMFramesIn, ma_uint32 frameCount, ma_format format, ma_uint32 channels, float factor)
-{
-    switch (format)
-    {
-    case ma_format_u8:  ma_copy_and_apply_volume_factor_pcm_frames_u8 ((ma_uint8*)pPCMFramesOut, (const ma_uint8*)pPCMFramesIn, frameCount, channels, factor); return;
-    case ma_format_s16: ma_copy_and_apply_volume_factor_pcm_frames_s16((ma_int16*)pPCMFramesOut, (const ma_int16*)pPCMFramesIn, frameCount, channels, factor); return;
-    case ma_format_s24: ma_copy_and_apply_volume_factor_pcm_frames_s24(           pPCMFramesOut,                  pPCMFramesIn, frameCount, channels, factor); return;
-    case ma_format_s32: ma_copy_and_apply_volume_factor_pcm_frames_s32((ma_int32*)pPCMFramesOut, (const ma_int32*)pPCMFramesIn, frameCount, channels, factor); return;
-    case ma_format_f32: ma_copy_and_apply_volume_factor_pcm_frames_f32(   (float*)pPCMFramesOut,    (const float*)pPCMFramesIn, frameCount, channels, factor); return;
-    default: return;    /* Do nothing. */
-    }
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames_u8(ma_uint8* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames_u8(pPCMFrames, pPCMFrames, frameCount, channels, factor);
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames_s16(ma_int16* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames_s16(pPCMFrames, pPCMFrames, frameCount, channels, factor);
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames_s24(void* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames_s24(pPCMFrames, pPCMFrames, frameCount, channels, factor);
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames_s32(ma_int32* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames_s32(pPCMFrames, pPCMFrames, frameCount, channels, factor);
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames_f32(float* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames_f32(pPCMFrames, pPCMFrames, frameCount, channels, factor);
-}
-
-MA_API void ma_apply_volume_factor_pcm_frames(void* pPCMFrames, ma_uint32 frameCount, ma_format format, ma_uint32 channels, float factor)
-{
-    ma_copy_and_apply_volume_factor_pcm_frames(pPCMFrames, pPCMFrames, frameCount, format, channels, factor);
-}
-
-
-MA_API float ma_factor_to_gain_db(float factor)
-{
-    return (float)(20*ma_log10f(factor));
-}
-
-MA_API float ma_gain_db_to_factor(float gain)
-{
-    return (float)ma_powf(10, gain/20.0f);
-}
 
 
 static void ma_device__on_data(ma_device* pDevice, void* pFramesOut, const void* pFramesIn, ma_uint32 frameCount)
@@ -9709,11 +9767,11 @@ static ma_thread_result MA_THREADCALL ma_device_thread__null(void* pData)
 static ma_result ma_device_do_operation__null(ma_device* pDevice, ma_uint32 operation)
 {
     ma_atomic_exchange_32(&pDevice->null_device.operation, operation);
-    if (!ma_event_signal(&pDevice->null_device.operationEvent)) {
+    if (ma_event_signal(&pDevice->null_device.operationEvent) != MA_SUCCESS) {
         return MA_ERROR;
     }
 
-    if (!ma_event_wait(&pDevice->null_device.operationCompletionEvent)) {
+    if (ma_event_wait(&pDevice->null_device.operationCompletionEvent) != MA_SUCCESS) {
         return MA_ERROR;
     }
 
@@ -9854,17 +9912,17 @@ static ma_result ma_device_init__null(ma_context* pContext, const ma_device_conf
     In order to get timing right, we need to create a thread that does nothing but keeps track of the timer. This timer is started when the
     first period is "written" to it, and then stopped in ma_device_stop__null().
     */
-    result = ma_event_init(pContext, &pDevice->null_device.operationEvent);
+    result = ma_event_init(&pDevice->null_device.operationEvent);
     if (result != MA_SUCCESS) {
         return result;
     }
 
-    result = ma_event_init(pContext, &pDevice->null_device.operationCompletionEvent);
+    result = ma_event_init(&pDevice->null_device.operationCompletionEvent);
     if (result != MA_SUCCESS) {
         return result;
     }
 
-    result = ma_thread_create(pContext, &pDevice->thread, ma_device_thread__null, pDevice);
+    result = ma_thread_create(&pDevice->thread, pContext->threadPriority, 0, ma_device_thread__null, pDevice);
     if (result != MA_SUCCESS) {
         return result;
     }
@@ -10246,6 +10304,7 @@ static ma_result ma_context_init__null(const ma_context_config* pConfig, ma_cont
     return MA_SUCCESS;
 }
 #endif
+
 
 
 /*******************************************************************************
@@ -11159,7 +11218,7 @@ static ULONG STDMETHODCALLTYPE ma_IMMNotificationClient_Release(ma_IMMNotificati
 static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceStateChanged(ma_IMMNotificationClient* pThis, LPCWSTR pDeviceID, DWORD dwNewState)
 {
 #ifdef MA_DEBUG_OUTPUT
-    printf("IMMNotificationClient_OnDeviceStateChanged(pDeviceID=%S, dwNewState=%u)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)", (unsigned int)dwNewState);
+    /*printf("IMMNotificationClient_OnDeviceStateChanged(pDeviceID=%S, dwNewState=%u)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)", (unsigned int)dwNewState);*/
 #endif
 
     (void)pThis;
@@ -11171,7 +11230,7 @@ static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceStateChanged(m
 static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceAdded(ma_IMMNotificationClient* pThis, LPCWSTR pDeviceID)
 {
 #ifdef MA_DEBUG_OUTPUT
-    printf("IMMNotificationClient_OnDeviceAdded(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");
+    /*printf("IMMNotificationClient_OnDeviceAdded(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");*/
 #endif
 
     /* We don't need to worry about this event for our purposes. */
@@ -11183,7 +11242,7 @@ static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceAdded(ma_IMMNo
 static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceRemoved(ma_IMMNotificationClient* pThis, LPCWSTR pDeviceID)
 {
 #ifdef MA_DEBUG_OUTPUT
-    printf("IMMNotificationClient_OnDeviceRemoved(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");
+    /*printf("IMMNotificationClient_OnDeviceRemoved(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");*/
 #endif
 
     /* We don't need to worry about this event for our purposes. */
@@ -11195,7 +11254,7 @@ static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDeviceRemoved(ma_IMM
 static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDefaultDeviceChanged(ma_IMMNotificationClient* pThis, ma_EDataFlow dataFlow, ma_ERole role, LPCWSTR pDefaultDeviceID)
 {
 #ifdef MA_DEBUG_OUTPUT
-    printf("IMMNotificationClient_OnDefaultDeviceChanged(dataFlow=%d, role=%d, pDefaultDeviceID=%S)\n", dataFlow, role, (pDefaultDeviceID != NULL) ? pDefaultDeviceID : L"(NULL)");
+    /*printf("IMMNotificationClient_OnDefaultDeviceChanged(dataFlow=%d, role=%d, pDefaultDeviceID=%S)\n", dataFlow, role, (pDefaultDeviceID != NULL) ? pDefaultDeviceID : L"(NULL)");*/
 #endif
 
     /* We only ever use the eConsole role in miniaudio. */
@@ -11244,7 +11303,7 @@ static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnDefaultDeviceChanged
 static HRESULT STDMETHODCALLTYPE ma_IMMNotificationClient_OnPropertyValueChanged(ma_IMMNotificationClient* pThis, LPCWSTR pDeviceID, const PROPERTYKEY key)
 {
 #ifdef MA_DEBUG_OUTPUT
-    printf("IMMNotificationClient_OnPropertyValueChanged(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");
+    /*printf("IMMNotificationClient_OnPropertyValueChanged(pDeviceID=%S)\n", (pDeviceID != NULL) ? pDeviceID : L"(NULL)");*/
 #endif
 
     (void)pThis;
@@ -12954,7 +13013,7 @@ static ma_result ma_device_main_loop__wasapi(ma_device* pDevice)
                         } else {
                         #ifdef MA_DEBUG_OUTPUT
                             if (flagsCapture != 0) {
-                                printf("[WASAPI] Capture Flags: %d\n", flagsCapture);
+                                printf("[WASAPI] Capture Flags: %ld\n", flagsCapture);
                             }
                         #endif
                         }
@@ -13204,7 +13263,7 @@ static ma_result ma_device_main_loop__wasapi(ma_device* pDevice)
                 } else {
                 #ifdef MA_DEBUG_OUTPUT
                     if (flagsCapture != 0) {
-                        printf("[WASAPI] Capture Flags: %d\n", flagsCapture);
+                        printf("[WASAPI] Capture Flags: %ld\n", flagsCapture);
                     }
                 #endif
                 }
@@ -14725,7 +14784,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
                             } else {
                                 /* This is an error. */
                             #ifdef MA_DEBUG_OUTPUT
-                                printf("[DirectSound] (Duplex/Playback) WARNING: Play cursor has moved in front of the write cursor (same loop iterations). physicalPlayCursorInBytes=%d, virtualWriteCursorInBytes=%d.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
+                                printf("[DirectSound] (Duplex/Playback) WARNING: Play cursor has moved in front of the write cursor (same loop iterations). physicalPlayCursorInBytes=%ld, virtualWriteCursorInBytes=%ld.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
                             #endif
                                 availableBytesPlayback = 0;
                             }
@@ -14736,7 +14795,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
                             } else {
                                 /* This is an error. */
                             #ifdef MA_DEBUG_OUTPUT
-                                printf("[DirectSound] (Duplex/Playback) WARNING: Write cursor has moved behind the play cursor (different loop iterations). physicalPlayCursorInBytes=%d, virtualWriteCursorInBytes=%d.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
+                                printf("[DirectSound] (Duplex/Playback) WARNING: Write cursor has moved behind the play cursor (different loop iterations). physicalPlayCursorInBytes=%ld, virtualWriteCursorInBytes=%ld.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
                             #endif
                                 availableBytesPlayback = 0;
                             }
@@ -14792,7 +14851,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
                                 }
 
                         #ifdef MA_DEBUG_OUTPUT
-                                printf("[DirectSound] (Duplex/Playback) Playback buffer starved. availableBytesPlayback=%d, silentPaddingInBytes=%d\n", availableBytesPlayback, silentPaddingInBytes);
+                                printf("[DirectSound] (Duplex/Playback) Playback buffer starved. availableBytesPlayback=%ld, silentPaddingInBytes=%ld\n", availableBytesPlayback, silentPaddingInBytes);
                         #endif
                             }
                         }
@@ -14917,7 +14976,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
 
             #ifdef MA_DEBUG_OUTPUT
                 if (lockSizeInBytesCapture != mappedSizeInBytesCapture) {
-                    printf("[DirectSound] (Capture) lockSizeInBytesCapture=%d != mappedSizeInBytesCapture=%d\n", lockSizeInBytesCapture, mappedSizeInBytesCapture);
+                    printf("[DirectSound] (Capture) lockSizeInBytesCapture=%ld != mappedSizeInBytesCapture=%ld\n", lockSizeInBytesCapture, mappedSizeInBytesCapture);
                 }
             #endif
 
@@ -14960,7 +15019,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
                     } else {
                         /* This is an error. */
                     #ifdef MA_DEBUG_OUTPUT
-                        printf("[DirectSound] (Playback) WARNING: Play cursor has moved in front of the write cursor (same loop iterations). physicalPlayCursorInBytes=%d, virtualWriteCursorInBytes=%d.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
+                        printf("[DirectSound] (Playback) WARNING: Play cursor has moved in front of the write cursor (same loop iterations). physicalPlayCursorInBytes=%ld, virtualWriteCursorInBytes=%ld.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
                     #endif
                         availableBytesPlayback = 0;
                     }
@@ -14971,7 +15030,7 @@ static ma_result ma_device_main_loop__dsound(ma_device* pDevice)
                     } else {
                         /* This is an error. */
                     #ifdef MA_DEBUG_OUTPUT
-                        printf("[DirectSound] (Playback) WARNING: Write cursor has moved behind the play cursor (different loop iterations). physicalPlayCursorInBytes=%d, virtualWriteCursorInBytes=%d.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
+                        printf("[DirectSound] (Playback) WARNING: Write cursor has moved behind the play cursor (different loop iterations). physicalPlayCursorInBytes=%ld, virtualWriteCursorInBytes=%ld.\n", physicalPlayCursorInBytes, virtualWriteCursorInBytesPlayback);
                     #endif
                         availableBytesPlayback = 0;
                     }
@@ -17681,7 +17740,7 @@ static ma_result ma_device_init_by_type__alsa(ma_context* pContext, const ma_dev
     ma_bool32 isUsingMMap;
     ma_snd_pcm_format_t formatALSA;
     ma_share_mode shareMode;
-    ma_device_id* pDeviceID;
+    const ma_device_id* pDeviceID;
     ma_format internalFormat;
     ma_uint32 internalChannels;
     ma_uint32 internalSampleRate;
@@ -18677,7 +18736,7 @@ static ma_result ma_context_init__alsa(const ma_context_config* pConfig, ma_cont
 
     pContext->alsa.useVerboseDeviceEnumeration = pConfig->alsa.useVerboseDeviceEnumeration;
 
-    if (ma_mutex_init(pContext, &pContext->alsa.internalDeviceEnumLock) != MA_SUCCESS) {
+    if (ma_mutex_init(&pContext->alsa.internalDeviceEnumLock) != MA_SUCCESS) {
         ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_ERROR, "[ALSA] WARNING: Failed to initialize mutex for internal device enumeration.", MA_ERROR);
     }
 
@@ -23488,7 +23547,7 @@ static ma_result ma_context__init_device_tracking__coreaudio(ma_context* pContex
         propAddress.mScope    = kAudioObjectPropertyScopeGlobal;
         propAddress.mElement  = kAudioObjectPropertyElementMaster;
         
-        ma_mutex_init(pContext, &g_DeviceTrackingMutex_CoreAudio);
+        ma_mutex_init(&g_DeviceTrackingMutex_CoreAudio);
         
         propAddress.mSelector = kAudioHardwarePropertyDefaultInputDevice;
         ((ma_AudioObjectAddPropertyListener_proc)pContext->coreaudio.AudioObjectAddPropertyListener)(kAudioObjectSystemObject, &propAddress, &ma_default_device_changed__coreaudio, NULL);
@@ -24642,7 +24701,6 @@ sndio Backend
 ******************************************************************************/
 #ifdef MA_HAS_SNDIO
 #include <fcntl.h>
-#include <sys/stat.h>
 
 /*
 Only supporting OpenBSD. This did not work very well at all on FreeBSD when I tried it. Not sure if this is due
@@ -30096,9 +30154,10 @@ MA_API ma_result ma_context_init(const ma_backend backends[], ma_uint32 backendC
         config = ma_context_config_init();
     }
 
-    pContext->logCallback    = config.logCallback;
-    pContext->threadPriority = config.threadPriority;
-    pContext->pUserData      = config.pUserData;
+    pContext->logCallback     = config.logCallback;
+    pContext->threadPriority  = config.threadPriority;
+    pContext->threadStackSize = config.threadStackSize;
+    pContext->pUserData       = config.pUserData;
 
     result = ma_allocation_callbacks_init_copy(&pContext->allocationCallbacks, &config.allocationCallbacks);
     if (result != MA_SUCCESS) {
@@ -30219,11 +30278,11 @@ MA_API ma_result ma_context_init(const ma_backend backends[], ma_uint32 backendC
 
         /* If this iteration was successful, return. */
         if (result == MA_SUCCESS) {
-            result = ma_mutex_init(pContext, &pContext->deviceEnumLock);
+            result = ma_mutex_init(&pContext->deviceEnumLock);
             if (result != MA_SUCCESS) {
                 ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_WARNING, "Failed to initialize mutex for device enumeration. ma_context_get_devices() is not thread safe.", result);
             }
-            result = ma_mutex_init(pContext, &pContext->deviceInfoLock);
+            result = ma_mutex_init(&pContext->deviceInfoLock);
             if (result != MA_SUCCESS) {
                 ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_WARNING, "Failed to initialize mutex for device info retrieval. ma_context_get_device_info() is not thread safe.", result);
             }
@@ -30588,7 +30647,7 @@ MA_API ma_result ma_device_init(ma_context* pContext, const ma_device_config* pC
     pDevice->playback.internalSampleRate = pDevice->sampleRate;
     ma_channel_map_copy(pDevice->playback.internalChannelMap, pDevice->playback.channelMap, pDevice->playback.channels);
     
-    result = ma_mutex_init(pContext, &pDevice->lock);
+    result = ma_mutex_init(&pDevice->lock);
     if (result != MA_SUCCESS) {
         return ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_ERROR, "Failed to create mutex.", result);
     }
@@ -30600,20 +30659,20 @@ MA_API ma_result ma_device_init(ma_context* pContext, const ma_device_config* pC
     Each of these semaphores is released internally by the worker thread when the work is completed. The start
     semaphore is also used to wake up the worker thread.
     */
-    result = ma_event_init(pContext, &pDevice->wakeupEvent);
+    result = ma_event_init(&pDevice->wakeupEvent);
     if (result != MA_SUCCESS) {
         ma_mutex_uninit(&pDevice->lock);
         return ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_ERROR, "Failed to create worker thread wakeup event.", result);
     }
 
-    result = ma_event_init(pContext, &pDevice->startEvent);
+    result = ma_event_init(&pDevice->startEvent);
     if (result != MA_SUCCESS) {
         ma_event_uninit(&pDevice->wakeupEvent);
         ma_mutex_uninit(&pDevice->lock);
         return ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_ERROR, "Failed to create worker thread start event.", result);
     }
 
-    result = ma_event_init(pContext, &pDevice->stopEvent);
+    result = ma_event_init(&pDevice->stopEvent);
     if (result != MA_SUCCESS) {
         ma_event_uninit(&pDevice->startEvent);
         ma_event_uninit(&pDevice->wakeupEvent);
@@ -30650,7 +30709,7 @@ MA_API ma_result ma_device_init(ma_context* pContext, const ma_device_config* pC
     /* Some backends don't require the worker thread. */
     if (!ma_context_is_backend_asynchronous(pContext)) {
         /* The worker thread. */
-        result = ma_thread_create(pContext, &pDevice->thread, ma_worker_thread, pDevice);
+        result = ma_thread_create(&pDevice->thread, pContext->threadPriority, pContext->threadStackSize, ma_worker_thread, pDevice);
         if (result != MA_SUCCESS) {
             ma_device_uninit(pDevice);
             return ma_context_post_error(pContext, NULL, MA_LOG_LEVEL_ERROR, "Failed to create worker thread.", result);
@@ -30663,36 +30722,33 @@ MA_API ma_result ma_device_init(ma_context* pContext, const ma_device_config* pC
     }
 
 
-#ifdef MA_DEBUG_OUTPUT
-    printf("[%s]\n", ma_get_backend_name(pDevice->pContext->backend));
+    ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "[%s]", ma_get_backend_name(pDevice->pContext->backend));
     if (pDevice->type == ma_device_type_capture || pDevice->type == ma_device_type_duplex) {
-        printf("  %s (%s)\n", pDevice->capture.name, "Capture");
-        printf("    Format:      %s -> %s\n", ma_get_format_name(pDevice->capture.format), ma_get_format_name(pDevice->capture.internalFormat));
-        printf("    Channels:    %d -> %d\n", pDevice->capture.channels, pDevice->capture.internalChannels);
-        printf("    Sample Rate: %d -> %d\n", pDevice->sampleRate, pDevice->capture.internalSampleRate);
-        printf("    Buffer Size: %d*%d (%d)\n", pDevice->capture.internalPeriodSizeInFrames, pDevice->capture.internalPeriods, (pDevice->capture.internalPeriodSizeInFrames * pDevice->capture.internalPeriods));
-        printf("    Conversion:\n");
-        printf("      Pre Format Conversion:    %s\n", pDevice->capture.converter.hasPreFormatConversion  ? "YES" : "NO");
-        printf("      Post Format Conversion:   %s\n", pDevice->capture.converter.hasPostFormatConversion ? "YES" : "NO");
-        printf("      Channel Routing:          %s\n", pDevice->capture.converter.hasChannelConverter     ? "YES" : "NO");
-        printf("      Resampling:               %s\n", pDevice->capture.converter.hasResampler            ? "YES" : "NO");
-        printf("      Passthrough:              %s\n", pDevice->capture.converter.isPassthrough           ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "  %s (%s)", pDevice->capture.name, "Capture");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Format:      %s -> %s", ma_get_format_name(pDevice->capture.format), ma_get_format_name(pDevice->capture.internalFormat));
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Channels:    %d -> %d", pDevice->capture.channels, pDevice->capture.internalChannels);
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Sample Rate: %d -> %d", pDevice->sampleRate, pDevice->capture.internalSampleRate);
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Buffer Size: %d*%d (%d)", pDevice->capture.internalPeriodSizeInFrames, pDevice->capture.internalPeriods, (pDevice->capture.internalPeriodSizeInFrames * pDevice->capture.internalPeriods));
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Conversion:");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Pre Format Conversion:    %s", pDevice->capture.converter.hasPreFormatConversion  ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Post Format Conversion:   %s", pDevice->capture.converter.hasPostFormatConversion ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Channel Routing:          %s", pDevice->capture.converter.hasChannelConverter     ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Resampling:               %s", pDevice->capture.converter.hasResampler            ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Passthrough:              %s", pDevice->capture.converter.isPassthrough           ? "YES" : "NO");
     }
     if (pDevice->type == ma_device_type_playback || pDevice->type == ma_device_type_duplex) {
-        printf("  %s (%s)\n", pDevice->playback.name, "Playback");
-        printf("    Format:      %s -> %s\n", ma_get_format_name(pDevice->playback.format), ma_get_format_name(pDevice->playback.internalFormat));
-        printf("    Channels:    %d -> %d\n", pDevice->playback.channels, pDevice->playback.internalChannels);
-        printf("    Sample Rate: %d -> %d\n", pDevice->sampleRate, pDevice->playback.internalSampleRate);
-        printf("    Buffer Size: %d*%d (%d)\n", pDevice->playback.internalPeriodSizeInFrames, pDevice->playback.internalPeriods, (pDevice->playback.internalPeriodSizeInFrames * pDevice->playback.internalPeriods));
-        printf("    Conversion:\n");
-        printf("      Pre Format Conversion:    %s\n", pDevice->playback.converter.hasPreFormatConversion  ? "YES" : "NO");
-        printf("      Post Format Conversion:   %s\n", pDevice->playback.converter.hasPostFormatConversion ? "YES" : "NO");
-        printf("      Channel Routing:          %s\n", pDevice->playback.converter.hasChannelConverter     ? "YES" : "NO");
-        printf("      Resampling:               %s\n", pDevice->playback.converter.hasResampler            ? "YES" : "NO");
-        printf("      Passthrough:              %s\n", pDevice->playback.converter.isPassthrough           ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "  %s (%s)", pDevice->playback.name, "Playback");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Format:      %s -> %s", ma_get_format_name(pDevice->playback.format), ma_get_format_name(pDevice->playback.internalFormat));
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Channels:    %d -> %d", pDevice->playback.channels, pDevice->playback.internalChannels);
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Sample Rate: %d -> %d", pDevice->sampleRate, pDevice->playback.internalSampleRate);
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Buffer Size: %d*%d (%d)", pDevice->playback.internalPeriodSizeInFrames, pDevice->playback.internalPeriods, (pDevice->playback.internalPeriodSizeInFrames * pDevice->playback.internalPeriods));
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "    Conversion:");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Pre Format Conversion:    %s", pDevice->playback.converter.hasPreFormatConversion  ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Post Format Conversion:   %s", pDevice->playback.converter.hasPostFormatConversion ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Channel Routing:          %s", pDevice->playback.converter.hasChannelConverter     ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Resampling:               %s", pDevice->playback.converter.hasResampler            ? "YES" : "NO");
+        ma_post_log_messagef(pContext, pDevice, MA_LOG_LEVEL_INFO, "      Passthrough:              %s", pDevice->playback.converter.isPassthrough           ? "YES" : "NO");
     }
-#endif
-
 
     MA_ASSERT(ma_device__get_state(pDevice) == MA_STATE_STOPPED);
     return MA_SUCCESS;
@@ -30970,6 +31026,247 @@ MA_API ma_result ma_device_get_master_gain_db(ma_device* pDevice, float* pGainDB
 #endif  /* MA_NO_DEVICE_IO */
 
 
+MA_API ma_uint32 ma_scale_buffer_size(ma_uint32 baseBufferSize, float scale)
+{
+    return ma_max(1, (ma_uint32)(baseBufferSize*scale));
+}
+
+MA_API ma_uint32 ma_calculate_buffer_size_in_milliseconds_from_frames(ma_uint32 bufferSizeInFrames, ma_uint32 sampleRate)
+{
+    return bufferSizeInFrames / (sampleRate/1000);
+}
+
+MA_API ma_uint32 ma_calculate_buffer_size_in_frames_from_milliseconds(ma_uint32 bufferSizeInMilliseconds, ma_uint32 sampleRate)
+{
+    return bufferSizeInMilliseconds * (sampleRate/1000); 
+}
+
+MA_API void ma_copy_pcm_frames(void* dst, const void* src, ma_uint64 frameCount, ma_format format, ma_uint32 channels)
+{
+    if (dst == src) {
+        return; /* No-op. */
+    }
+
+    ma_copy_memory_64(dst, src, frameCount * ma_get_bytes_per_frame(format, channels));
+}
+
+MA_API void ma_silence_pcm_frames(void* p, ma_uint64 frameCount, ma_format format, ma_uint32 channels)
+{
+    if (format == ma_format_u8) {
+        ma_uint64 sampleCount = frameCount * channels;
+        ma_uint64 iSample;
+        for (iSample = 0; iSample < sampleCount; iSample += 1) {
+            ((ma_uint8*)p)[iSample] = 128;
+        }
+    } else {
+        ma_zero_memory_64(p, frameCount * ma_get_bytes_per_frame(format, channels));
+    }
+}
+
+MA_API void* ma_offset_pcm_frames_ptr(void* p, ma_uint64 offsetInFrames, ma_format format, ma_uint32 channels)
+{
+    return ma_offset_ptr(p, offsetInFrames * ma_get_bytes_per_frame(format, channels));
+}
+
+MA_API const void* ma_offset_pcm_frames_const_ptr(const void* p, ma_uint64 offsetInFrames, ma_format format, ma_uint32 channels)
+{
+    return ma_offset_ptr(p, offsetInFrames * ma_get_bytes_per_frame(format, channels));
+}
+
+
+MA_API void ma_clip_samples_f32(float* p, ma_uint64 sampleCount)
+{
+    ma_uint32 iSample;
+
+    /* TODO: Research a branchless SSE implementation. */
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        p[iSample] = ma_clip_f32(p[iSample]);
+    }
+}
+
+
+MA_API void ma_copy_and_apply_volume_factor_u8(ma_uint8* pSamplesOut, const ma_uint8* pSamplesIn, ma_uint32 sampleCount, float factor)
+{
+    ma_uint32 iSample;
+
+    if (pSamplesOut == NULL || pSamplesIn == NULL) {
+        return;
+    }
+
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        pSamplesOut[iSample] = (ma_uint8)(pSamplesIn[iSample] * factor);
+    }
+}
+
+MA_API void ma_copy_and_apply_volume_factor_s16(ma_int16* pSamplesOut, const ma_int16* pSamplesIn, ma_uint32 sampleCount, float factor)
+{
+    ma_uint32 iSample;
+
+    if (pSamplesOut == NULL || pSamplesIn == NULL) {
+        return;
+    }
+
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        pSamplesOut[iSample] = (ma_int16)(pSamplesIn[iSample] * factor);
+    }
+}
+
+MA_API void ma_copy_and_apply_volume_factor_s24(void* pSamplesOut, const void* pSamplesIn, ma_uint32 sampleCount, float factor)
+{
+    ma_uint32 iSample;
+    ma_uint8* pSamplesOut8;
+    ma_uint8* pSamplesIn8;
+
+    if (pSamplesOut == NULL || pSamplesIn == NULL) {
+        return;
+    }
+
+    pSamplesOut8 = (ma_uint8*)pSamplesOut;
+    pSamplesIn8  = (ma_uint8*)pSamplesIn;
+
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        ma_int32 sampleS32;
+
+        sampleS32 = (ma_int32)(((ma_uint32)(pSamplesIn8[iSample*3+0]) << 8) | ((ma_uint32)(pSamplesIn8[iSample*3+1]) << 16) | ((ma_uint32)(pSamplesIn8[iSample*3+2])) << 24);
+        sampleS32 = (ma_int32)(sampleS32 * factor);
+
+        pSamplesOut8[iSample*3+0] = (ma_uint8)(((ma_uint32)sampleS32 & 0x0000FF00) >>  8);
+        pSamplesOut8[iSample*3+1] = (ma_uint8)(((ma_uint32)sampleS32 & 0x00FF0000) >> 16);
+        pSamplesOut8[iSample*3+2] = (ma_uint8)(((ma_uint32)sampleS32 & 0xFF000000) >> 24);
+    }
+}
+
+MA_API void ma_copy_and_apply_volume_factor_s32(ma_int32* pSamplesOut, const ma_int32* pSamplesIn, ma_uint32 sampleCount, float factor)
+{
+    ma_uint32 iSample;
+
+    if (pSamplesOut == NULL || pSamplesIn == NULL) {
+        return;
+    }
+
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        pSamplesOut[iSample] = (ma_int32)(pSamplesIn[iSample] * factor);
+    }
+}
+
+MA_API void ma_copy_and_apply_volume_factor_f32(float* pSamplesOut, const float* pSamplesIn, ma_uint32 sampleCount, float factor)
+{
+    ma_uint32 iSample;
+
+    if (pSamplesOut == NULL || pSamplesIn == NULL) {
+        return;
+    }
+
+    for (iSample = 0; iSample < sampleCount; iSample += 1) {
+        pSamplesOut[iSample] = pSamplesIn[iSample] * factor;
+    }
+}
+
+MA_API void ma_apply_volume_factor_u8(ma_uint8* pSamples, ma_uint32 sampleCount, float factor)
+{
+    ma_copy_and_apply_volume_factor_u8(pSamples, pSamples, sampleCount, factor);
+}
+
+MA_API void ma_apply_volume_factor_s16(ma_int16* pSamples, ma_uint32 sampleCount, float factor)
+{
+    ma_copy_and_apply_volume_factor_s16(pSamples, pSamples, sampleCount, factor);
+}
+
+MA_API void ma_apply_volume_factor_s24(void* pSamples, ma_uint32 sampleCount, float factor)
+{
+    ma_copy_and_apply_volume_factor_s24(pSamples, pSamples, sampleCount, factor);
+}
+
+MA_API void ma_apply_volume_factor_s32(ma_int32* pSamples, ma_uint32 sampleCount, float factor)
+{
+    ma_copy_and_apply_volume_factor_s32(pSamples, pSamples, sampleCount, factor);
+}
+
+MA_API void ma_apply_volume_factor_f32(float* pSamples, ma_uint32 sampleCount, float factor)
+{
+    ma_copy_and_apply_volume_factor_f32(pSamples, pSamples, sampleCount, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames_u8(ma_uint8* pPCMFramesOut, const ma_uint8* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_u8(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s16(ma_int16* pPCMFramesOut, const ma_int16* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_s16(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s24(void* pPCMFramesOut, const void* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_s24(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames_s32(ma_int32* pPCMFramesOut, const ma_int32* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_s32(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames_f32(float* pPCMFramesOut, const float* pPCMFramesIn, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_f32(pPCMFramesOut, pPCMFramesIn, frameCount*channels, factor);
+}
+
+MA_API void ma_copy_and_apply_volume_factor_pcm_frames(void* pPCMFramesOut, const void* pPCMFramesIn, ma_uint32 frameCount, ma_format format, ma_uint32 channels, float factor)
+{
+    switch (format)
+    {
+    case ma_format_u8:  ma_copy_and_apply_volume_factor_pcm_frames_u8 ((ma_uint8*)pPCMFramesOut, (const ma_uint8*)pPCMFramesIn, frameCount, channels, factor); return;
+    case ma_format_s16: ma_copy_and_apply_volume_factor_pcm_frames_s16((ma_int16*)pPCMFramesOut, (const ma_int16*)pPCMFramesIn, frameCount, channels, factor); return;
+    case ma_format_s24: ma_copy_and_apply_volume_factor_pcm_frames_s24(           pPCMFramesOut,                  pPCMFramesIn, frameCount, channels, factor); return;
+    case ma_format_s32: ma_copy_and_apply_volume_factor_pcm_frames_s32((ma_int32*)pPCMFramesOut, (const ma_int32*)pPCMFramesIn, frameCount, channels, factor); return;
+    case ma_format_f32: ma_copy_and_apply_volume_factor_pcm_frames_f32(   (float*)pPCMFramesOut,    (const float*)pPCMFramesIn, frameCount, channels, factor); return;
+    default: return;    /* Do nothing. */
+    }
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames_u8(ma_uint8* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames_u8(pPCMFrames, pPCMFrames, frameCount, channels, factor);
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames_s16(ma_int16* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames_s16(pPCMFrames, pPCMFrames, frameCount, channels, factor);
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames_s24(void* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames_s24(pPCMFrames, pPCMFrames, frameCount, channels, factor);
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames_s32(ma_int32* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames_s32(pPCMFrames, pPCMFrames, frameCount, channels, factor);
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames_f32(float* pPCMFrames, ma_uint32 frameCount, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames_f32(pPCMFrames, pPCMFrames, frameCount, channels, factor);
+}
+
+MA_API void ma_apply_volume_factor_pcm_frames(void* pPCMFrames, ma_uint32 frameCount, ma_format format, ma_uint32 channels, float factor)
+{
+    ma_copy_and_apply_volume_factor_pcm_frames(pPCMFrames, pPCMFrames, frameCount, format, channels, factor);
+}
+
+
+MA_API float ma_factor_to_gain_db(float factor)
+{
+    return (float)(20*ma_log10f(factor));
+}
+
+MA_API float ma_gain_db_to_factor(float gain)
+{
+    return (float)ma_powf(10, gain/20.0f);
+}
+
+
 /**************************************************************************************************************************************************************
 
 Format Conversion
@@ -31016,7 +31313,13 @@ static MA_INLINE ma_int64 ma_clip_s24(ma_int64 x)
 
 static MA_INLINE ma_int32 ma_clip_s32(ma_int64 x)
 {
-    return (ma_int32)ma_clamp(x, -(ma_int64)2147483648, (ma_int64)2147483647);
+    /* This dance is to silence warnings with -std=c89. A good compiler should be able to optimize this away. */
+    ma_int64 clipMin;
+    ma_int64 clipMax;
+    clipMin = -((ma_int64)2147483647 + 1);
+    clipMax =   (ma_int64)2147483647;
+
+    return (ma_int32)ma_clamp(x, clipMin, clipMax);
 }
 
 
@@ -35381,6 +35684,24 @@ MA_API ma_linear_resampler_config ma_linear_resampler_config_init(ma_format form
     return config;
 }
 
+static void ma_linear_resampler_adjust_timer_for_new_rate(ma_linear_resampler* pResampler, ma_uint32 oldSampleRateOut, ma_uint32 newSampleRateOut)
+{
+    /*
+    So what's happening here? Basically we need to adjust the fractional component of the time advance based on the new rate. The old time advance will
+    be based on the old sample rate, but we are needing to adjust it to that it's based on the new sample rate.
+    */
+    ma_uint32 oldRateTimeWhole = pResampler->inTimeFrac / oldSampleRateOut;  /* <-- This should almost never be anything other than 0, but leaving it here to make this more general and robust just in case. */
+    ma_uint32 oldRateTimeFract = pResampler->inTimeFrac % oldSampleRateOut;
+
+    pResampler->inTimeFrac =
+         (oldRateTimeWhole * newSampleRateOut) +
+        ((oldRateTimeFract * newSampleRateOut) / oldSampleRateOut);
+
+    /* Make sure the fractional part is less than the output sample rate. */
+    pResampler->inTimeInt += pResampler->inTimeFrac / pResampler->config.sampleRateOut;
+    pResampler->inTimeFrac = pResampler->inTimeFrac % pResampler->config.sampleRateOut;
+}
+
 static ma_result ma_linear_resampler_set_rate_internal(ma_linear_resampler* pResampler, ma_uint32 sampleRateIn, ma_uint32 sampleRateOut, ma_bool32 isResamplerAlreadyInitialized)
 {
     ma_result result;
@@ -35388,6 +35709,7 @@ static ma_result ma_linear_resampler_set_rate_internal(ma_linear_resampler* pRes
     ma_uint32 lpfSampleRate;
     double lpfCutoffFrequency;
     ma_lpf_config lpfConfig;
+    ma_uint32 oldSampleRateOut; /* Required for adjusting time advance down the bottom. */
 
     if (pResampler == NULL) {
         return MA_INVALID_ARGS;
@@ -35396,6 +35718,8 @@ static ma_result ma_linear_resampler_set_rate_internal(ma_linear_resampler* pRes
     if (sampleRateIn == 0 || sampleRateOut == 0) {
         return MA_INVALID_ARGS;
     }
+
+    oldSampleRateOut = pResampler->config.sampleRateOut;
 
     pResampler->config.sampleRateIn  = sampleRateIn;
     pResampler->config.sampleRateOut = sampleRateOut;
@@ -35429,12 +35753,12 @@ static ma_result ma_linear_resampler_set_rate_internal(ma_linear_resampler* pRes
         return result;
     }
 
+
     pResampler->inAdvanceInt  = pResampler->config.sampleRateIn / pResampler->config.sampleRateOut;
     pResampler->inAdvanceFrac = pResampler->config.sampleRateIn % pResampler->config.sampleRateOut;
 
-    /* Make sure the fractional part is less than the output sample rate. */
-    pResampler->inTimeInt += pResampler->inTimeFrac / pResampler->config.sampleRateOut;
-    pResampler->inTimeFrac = pResampler->inTimeFrac % pResampler->config.sampleRateOut;
+    /* Our timer was based on the old rate. We need to adjust it so that it's based on the new rate. */
+    ma_linear_resampler_adjust_timer_for_new_rate(pResampler, oldSampleRateOut, pResampler->config.sampleRateOut);
 
     return MA_SUCCESS;
 }
@@ -35543,13 +35867,9 @@ static ma_result ma_linear_resampler_process_pcm_frames_s16_downsample(ma_linear
     framesProcessedIn  = 0;
     framesProcessedOut = 0;
 
-    for (;;) {
-        if (framesProcessedOut >= frameCountOut) {
-            break;
-        }
-
+    while (framesProcessedOut < frameCountOut) {
         /* Before interpolating we need to load the buffers. When doing this we need to ensure we run every input sample through the filter. */
-        while (pResampler->inTimeInt > 0 && frameCountIn > 0) {
+        while (pResampler->inTimeInt > 0 && frameCountIn > framesProcessedIn) {
             ma_uint32 iChannel;
 
             if (pFramesInS16 != NULL) {
@@ -35568,7 +35888,6 @@ static ma_result ma_linear_resampler_process_pcm_frames_s16_downsample(ma_linear
             /* Filter. */
             ma_lpf_process_pcm_frame_s16(&pResampler->lpf, pResampler->x1.s16, pResampler->x1.s16);
 
-            frameCountIn          -= 1;
             framesProcessedIn     += 1;
             pResampler->inTimeInt -= 1;
         }
@@ -35622,13 +35941,9 @@ static ma_result ma_linear_resampler_process_pcm_frames_s16_upsample(ma_linear_r
     framesProcessedIn  = 0;
     framesProcessedOut = 0;
 
-    for (;;) {
-        if (framesProcessedOut >= frameCountOut) {
-            break;
-        }
-
+    while (framesProcessedOut < frameCountOut) {
         /* Before interpolating we need to load the buffers. */
-        while (pResampler->inTimeInt > 0 && frameCountIn > 0) {
+        while (pResampler->inTimeInt > 0 && frameCountIn > framesProcessedIn) {
             ma_uint32 iChannel;
 
             if (pFramesInS16 != NULL) {
@@ -35644,7 +35959,6 @@ static ma_result ma_linear_resampler_process_pcm_frames_s16_upsample(ma_linear_r
                 }
             }
 
-            frameCountIn          -= 1;
             framesProcessedIn     += 1;
             pResampler->inTimeInt -= 1;
         }
@@ -35713,13 +36027,9 @@ static ma_result ma_linear_resampler_process_pcm_frames_f32_downsample(ma_linear
     framesProcessedIn  = 0;
     framesProcessedOut = 0;
 
-    for (;;) {
-        if (framesProcessedOut >= frameCountOut) {
-            break;
-        }
-
+    while (framesProcessedOut < frameCountOut) {
         /* Before interpolating we need to load the buffers. When doing this we need to ensure we run every input sample through the filter. */
-        while (pResampler->inTimeInt > 0 && frameCountIn > 0) {
+        while (pResampler->inTimeInt > 0 && frameCountIn > framesProcessedIn) {
             ma_uint32 iChannel;
 
             if (pFramesInF32 != NULL) {
@@ -35738,7 +36048,6 @@ static ma_result ma_linear_resampler_process_pcm_frames_f32_downsample(ma_linear
             /* Filter. */
             ma_lpf_process_pcm_frame_f32(&pResampler->lpf, pResampler->x1.f32, pResampler->x1.f32);
 
-            frameCountIn          -= 1;
             framesProcessedIn     += 1;
             pResampler->inTimeInt -= 1;
         }
@@ -35792,13 +36101,9 @@ static ma_result ma_linear_resampler_process_pcm_frames_f32_upsample(ma_linear_r
     framesProcessedIn  = 0;
     framesProcessedOut = 0;
 
-    for (;;) {
-        if (framesProcessedOut >= frameCountOut) {
-            break;
-        }
-
+    while (framesProcessedOut < frameCountOut) {
         /* Before interpolating we need to load the buffers. */
-        while (pResampler->inTimeInt > 0 && frameCountIn > 0) {
+        while (pResampler->inTimeInt > 0 && frameCountIn > framesProcessedIn) {
             ma_uint32 iChannel;
 
             if (pFramesInF32 != NULL) {
@@ -35814,7 +36119,6 @@ static ma_result ma_linear_resampler_process_pcm_frames_f32_upsample(ma_linear_r
                 }
             }
 
-            frameCountIn          -= 1;
             framesProcessedIn     += 1;
             pResampler->inTimeInt -= 1;
         }
@@ -35891,7 +36195,7 @@ MA_API ma_result ma_linear_resampler_set_rate_ratio(ma_linear_resampler* pResamp
     ma_uint32 n;
     ma_uint32 d;
 
-    d = 1000000;    /* We use up to 6 decimal places. */
+    d = 1000;
     n = (ma_uint32)(ratioInOut * d);
 
     if (n == 0) {
@@ -35906,7 +36210,7 @@ MA_API ma_result ma_linear_resampler_set_rate_ratio(ma_linear_resampler* pResamp
 
 MA_API ma_uint64 ma_linear_resampler_get_required_input_frame_count(ma_linear_resampler* pResampler, ma_uint64 outputFrameCount)
 {
-    ma_uint64 count;
+    ma_uint64 inputFrameCount;
 
     if (pResampler == NULL) {
         return 0;
@@ -35917,51 +36221,48 @@ MA_API ma_uint64 ma_linear_resampler_get_required_input_frame_count(ma_linear_re
     }
 
     /* Any whole input frames are consumed before the first output frame is generated. */
-    count = pResampler->inTimeInt;
+    inputFrameCount = pResampler->inTimeInt;
     outputFrameCount -= 1;
 
     /* The rest of the output frames can be calculated in constant time. */
-    count += outputFrameCount * pResampler->inAdvanceInt;
-    count += (pResampler->inTimeFrac + (outputFrameCount * pResampler->inAdvanceFrac)) / pResampler->config.sampleRateOut;
+    inputFrameCount += outputFrameCount * pResampler->inAdvanceInt;
+    inputFrameCount += (pResampler->inTimeFrac + (outputFrameCount * pResampler->inAdvanceFrac)) / pResampler->config.sampleRateOut;
 
-    return count;
+    return inputFrameCount;
 }
 
 MA_API ma_uint64 ma_linear_resampler_get_expected_output_frame_count(ma_linear_resampler* pResampler, ma_uint64 inputFrameCount)
 {
     ma_uint64 outputFrameCount;
-    ma_uint64 inTimeInt;
-    ma_uint64 inTimeFrac;
-
+    ma_uint64 preliminaryInputFrameCountFromFrac;
+    ma_uint64 preliminaryInputFrameCount;
+    
     if (pResampler == NULL) {
         return 0;
     }
 
-    /* TODO: Try making this run in constant time. */
+    /*
+    The first step is to get a preliminary output frame count. This will either be exactly equal to what we need, or less by 1. We need to
+    determine how many input frames will be consumed by this value. If it's greater than our original input frame count it means we won't
+    be able to generate an extra frame because we will have run out of input data. Otherwise we will have enough input for the generation
+    of an extra output frame. This add-by-one logic is necessary due to how the data loading logic works when processing frames.
+    */
+    outputFrameCount = (inputFrameCount * pResampler->config.sampleRateOut) / pResampler->config.sampleRateIn;
 
-    outputFrameCount = 0;
-    inTimeInt  = pResampler->inTimeInt;
-    inTimeFrac = pResampler->inTimeFrac;
+    /*
+    We need to determine how many *whole* input frames will have been processed to generate our preliminary output frame count. This is
+    used in the logic below to determine whether or not we need to add an extra output frame.
+    */
+    preliminaryInputFrameCountFromFrac = (pResampler->inTimeFrac + outputFrameCount*pResampler->inAdvanceFrac) / pResampler->config.sampleRateOut;
+    preliminaryInputFrameCount         = (pResampler->inTimeInt  + outputFrameCount*pResampler->inAdvanceInt ) + preliminaryInputFrameCountFromFrac;
 
-    for (;;) {
-        while (inTimeInt > 0 && inputFrameCount > 0) {
-            inputFrameCount -= 1;
-            inTimeInt       -= 1;
-        }
-
-        if (inTimeInt > 0) {
-            break;
-        }
-
+    /*
+    If the total number of *whole* input frames that would be required to generate our preliminary output frame count is greather than
+    the amount of whole input frames we have available as input we need to *not* add an extra output frame as there won't be enough data
+    to actually process. Otherwise we need to add the extra output frame.
+    */
+    if (preliminaryInputFrameCount <= inputFrameCount) {
         outputFrameCount += 1;
-
-        /* Advance time forward. */
-        inTimeInt  += pResampler->inAdvanceInt;
-        inTimeFrac += pResampler->inAdvanceFrac;
-        if (inTimeFrac >= pResampler->config.sampleRateOut) {
-            inTimeFrac -= pResampler->config.sampleRateOut;
-            inTimeInt  += 1;
-        }
     }
 
     return outputFrameCount;
@@ -36393,7 +36694,7 @@ MA_API ma_result ma_resampler_set_rate_ratio(ma_resampler* pResampler, float rat
         ma_uint32 n;
         ma_uint32 d;
 
-        d = 1000000;    /* We use up to 6 decimal places. */
+        d = 1000;
         n = (ma_uint32)(ratio * d);
 
         if (n == 0) {
@@ -37214,7 +37515,7 @@ static ma_result ma_channel_converter_process_pcm_frames__stereo_to_mono(ma_chan
             const ma_uint8* pFramesInU8  = (const ma_uint8*)pFramesIn;
 
             for (iFrame = 0; iFrame < frameCount; ++iFrame) {
-                pFramesOutU8[iFrame] = ma_clip_u8((ma_pcm_sample_u8_to_s16_no_scale(pFramesInU8[iFrame*2+0]) + ma_pcm_sample_u8_to_s16_no_scale(pFramesInU8[iFrame*2+1])) / 2);
+                pFramesOutU8[iFrame] = ma_clip_u8((ma_int16)((ma_pcm_sample_u8_to_s16_no_scale(pFramesInU8[iFrame*2+0]) + ma_pcm_sample_u8_to_s16_no_scale(pFramesInU8[iFrame*2+1])) / 2));
             }
         } break;
 
@@ -37346,7 +37647,7 @@ static ma_result ma_channel_converter_process_pcm_frames__weights(ma_channel_con
                         ma_int64 s = pFramesOutS32[iFrame*pConverter->channelsOut + iChannelOut];
                         s += (pFramesInS32[iFrame*pConverter->channelsIn + iChannelIn] * pConverter->weights.s16[iChannelIn][iChannelOut]) >> MA_CHANNEL_CONVERTER_FIXED_POINT_SHIFT;
 
-                        pFramesOutS32[iFrame*pConverter->channelsOut + iChannelOut] = (ma_int32)ma_clamp(s, -(ma_int64)2147483648, (ma_int64)2147483647);
+                        pFramesOutS32[iFrame*pConverter->channelsOut + iChannelOut] = ma_clip_s32(s);
                     }
                 }
             }
@@ -39885,14 +40186,70 @@ MA_API ma_uint32 ma_get_bytes_per_sample(ma_format format)
 
 
 
-MA_API ma_uint64 ma_data_source_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount)
+MA_API ma_result ma_data_source_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead, ma_bool32 loop)
 {
     ma_data_source_callbacks* pCallbacks = (ma_data_source_callbacks*)pDataSource;
-    if (pCallbacks == NULL || pCallbacks->onRead == NULL) {
-        return 0;
+    if (pCallbacks == NULL) {
+        return MA_INVALID_ARGS;
     }
 
-    return pCallbacks->onRead(pDataSource, pFramesOut, frameCount);
+    if (pCallbacks->onRead == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    /* A very small optimization for the non looping case. */
+    if (loop == MA_FALSE) {
+        return pCallbacks->onRead(pDataSource, pFramesOut, frameCount, pFramesRead);
+    } else {
+        ma_format format;
+        ma_uint32 channels;
+        if (ma_data_source_get_data_format(pDataSource, &format, &channels) != MA_SUCCESS) {
+            return pCallbacks->onRead(pDataSource, pFramesOut, frameCount, pFramesRead); /* We don't have a way to retrieve the data format which means we don't know how to offset the output buffer. Just read as much as we can. */
+        } else {
+            ma_result result = MA_SUCCESS;
+            ma_uint64 totalFramesProcessed;
+            void* pRunningFramesOut = pFramesOut;
+
+            totalFramesProcessed = 0;
+            while (totalFramesProcessed < frameCount) {
+                ma_uint64 framesProcessed;
+                ma_uint64 framesRemaining = frameCount - totalFramesProcessed;
+
+                result = pCallbacks->onRead(pDataSource, pRunningFramesOut, framesRemaining, &framesProcessed);
+                totalFramesProcessed += framesProcessed;
+
+                /*
+                If we encounted an error from the read callback, make sure it's propagated to the caller. The caller may need to know whether or not MA_BUSY is returned which is
+                not necessarily considered an error. 
+                */
+                if (result != MA_SUCCESS) {
+                    break;
+                }
+
+                /*
+                We can determine if we've reached the end by checking the return value of the onRead() callback. If it's less than what we requested it means
+                we've reached the end. To loop back to the start, all we need to do is seek back to the first frame.
+                */
+                if (framesProcessed < framesRemaining) {
+                    if (ma_data_source_seek_to_pcm_frame(pDataSource, 0) != MA_SUCCESS) {
+                        break;
+                    }
+                }
+
+                if (pRunningFramesOut != NULL) {
+                    pRunningFramesOut = ma_offset_ptr(pRunningFramesOut, framesProcessed * ma_get_bytes_per_frame(format, channels));
+                }
+            }
+
+            *pFramesRead = totalFramesProcessed;
+            return result;
+        }
+    }
+}
+
+MA_API ma_result ma_data_source_seek_pcm_frames(ma_data_source* pDataSource, ma_uint64 frameCount, ma_uint64* pFramesSeeked, ma_bool32 loop)
+{
+    return ma_data_source_read_pcm_frames(pDataSource, NULL, frameCount, pFramesSeeked, loop);
 }
 
 MA_API ma_result ma_data_source_seek_to_pcm_frame(ma_data_source* pDataSource, ma_uint64 frameIndex)
@@ -39903,6 +40260,26 @@ MA_API ma_result ma_data_source_seek_to_pcm_frame(ma_data_source* pDataSource, m
     }
 
     return pCallbacks->onSeek(pDataSource, frameIndex);
+}
+
+MA_API ma_result ma_data_source_map(ma_data_source* pDataSource, void** ppFramesOut, ma_uint64* pFrameCount)
+{
+    ma_data_source_callbacks* pCallbacks = (ma_data_source_callbacks*)pDataSource;
+    if (pCallbacks == NULL || pCallbacks->onMap == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    return pCallbacks->onMap(pDataSource, ppFramesOut, pFrameCount);
+}
+
+MA_API ma_result ma_data_source_unmap(ma_data_source* pDataSource, ma_uint64 frameCount)
+{
+    ma_data_source_callbacks* pCallbacks = (ma_data_source_callbacks*)pDataSource;
+    if (pCallbacks == NULL || pCallbacks->onUnmap == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    return pCallbacks->onUnmap(pDataSource, frameCount);
 }
 
 MA_API ma_result ma_data_source_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels)
@@ -39948,14 +40325,34 @@ MA_API ma_audio_buffer_config ma_audio_buffer_config_init(ma_format format, ma_u
 }
 
 
-static ma_uint64 ma_audio_buffer__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount)
+static ma_result ma_audio_buffer__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
-    return ma_audio_buffer_read_pcm_frames((ma_audio_buffer*)pDataSource, pFramesOut, frameCount, MA_FALSE);
+    ma_uint64 framesRead = ma_audio_buffer_read_pcm_frames((ma_audio_buffer*)pDataSource, pFramesOut, frameCount, MA_FALSE);
+
+    if (pFramesRead != NULL) {
+        *pFramesRead = framesRead;
+    }
+
+    if (framesRead < frameCount) {
+        return MA_AT_END;
+    }
+
+    return MA_SUCCESS;
 }
 
 static ma_result ma_audio_buffer__data_source_on_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
 {
     return ma_audio_buffer_seek_to_pcm_frame((ma_audio_buffer*)pDataSource, frameIndex);
+}
+
+static ma_result ma_audio_buffer__data_source_on_map(ma_data_source* pDataSource, void** ppFramesOut, ma_uint64* pFrameCount)
+{
+    return ma_audio_buffer_map((ma_audio_buffer*)pDataSource, ppFramesOut, pFrameCount);
+}
+
+static ma_result ma_audio_buffer__data_source_on_unmap(ma_data_source* pDataSource, ma_uint64 frameCount)
+{
+    return ma_audio_buffer_unmap((ma_audio_buffer*)pDataSource, frameCount);
 }
 
 static ma_result ma_audio_buffer__data_source_on_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels)
@@ -39986,6 +40383,8 @@ static ma_result ma_audio_buffer_init_ex(const ma_audio_buffer_config* pConfig, 
 
     pAudioBuffer->ds.onRead          = ma_audio_buffer__data_source_on_read;
     pAudioBuffer->ds.onSeek          = ma_audio_buffer__data_source_on_seek;
+    pAudioBuffer->ds.onMap           = ma_audio_buffer__data_source_on_map;
+    pAudioBuffer->ds.onUnmap         = ma_audio_buffer__data_source_on_unmap;
     pAudioBuffer->ds.onGetDataFormat = ma_audio_buffer__data_source_on_get_data_format;
     pAudioBuffer->format             = pConfig->format;
     pAudioBuffer->channels           = pConfig->channels;
@@ -40211,7 +40610,11 @@ MA_API ma_result ma_audio_buffer_unmap(ma_audio_buffer* pAudioBuffer, ma_uint64 
 
     pAudioBuffer->cursor += frameCount;
 
-    return MA_SUCCESS;
+    if (pAudioBuffer->cursor == pAudioBuffer->sizeInFrames) {
+        return MA_AT_END;   /* Successful. Need to tell the caller that the end has been reached so that it can loop if desired. */
+    } else {
+        return MA_SUCCESS;
+    }
 }
 
 MA_API ma_result ma_audio_buffer_at_end(ma_audio_buffer* pAudioBuffer)
@@ -40223,6 +40626,805 @@ MA_API ma_result ma_audio_buffer_at_end(ma_audio_buffer* pAudioBuffer)
     return pAudioBuffer->cursor == pAudioBuffer->sizeInFrames;
 }
 
+
+
+/**************************************************************************************************************************************************************
+
+VFS
+
+**************************************************************************************************************************************************************/
+MA_API ma_result ma_vfs_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pFile == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pFile = NULL;
+
+    if (pVFS == NULL || pFilePath == NULL || openMode == 0) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onOpen == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onOpen(pVFS, pFilePath, openMode, pFile);
+}
+
+MA_API ma_result ma_vfs_open_w(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pFile == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pFile = NULL;
+
+    if (pVFS == NULL || pFilePath == NULL || openMode == 0) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onOpenW == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onOpenW(pVFS, pFilePath, openMode, pFile);
+}
+
+MA_API ma_result ma_vfs_close(ma_vfs* pVFS, ma_vfs_file file)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pVFS == NULL || file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onClose == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onClose(pVFS, file);
+}
+
+MA_API ma_result ma_vfs_read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pBytesRead != NULL) {
+        *pBytesRead = 0;
+    }
+
+    if (pVFS == NULL || file == NULL || pDst == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onRead == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onRead(pVFS, file, pDst, sizeInBytes, pBytesRead);
+}
+
+MA_API ma_result ma_vfs_write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pBytesWritten == NULL) {
+        *pBytesWritten = 0;
+    }
+
+    if (pVFS == NULL || file == NULL || pSrc == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onWrite == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onWrite(pVFS, file, pSrc, sizeInBytes, pBytesWritten);
+}
+
+MA_API ma_result ma_vfs_seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pVFS == NULL || file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onSeek == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onSeek(pVFS, file, offset, origin);
+}
+
+MA_API ma_result ma_vfs_tell(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pCursor == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pCursor = 0;
+
+    if (pVFS == NULL || file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onTell == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onTell(pVFS, file, pCursor);
+}
+
+MA_API ma_result ma_vfs_info(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo)
+{
+    ma_vfs_callbacks* pCallbacks = (ma_vfs_callbacks*)pVFS;
+
+    if (pInfo == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    MA_ZERO_OBJECT(pInfo);
+
+    if (pVFS == NULL || file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pCallbacks->onInfo == NULL) {
+        return MA_NOT_IMPLEMENTED;
+    }
+
+    return pCallbacks->onInfo(pVFS, file, pInfo);
+}
+
+
+static ma_result ma_vfs_open_and_read_file_ex(ma_vfs* pVFS, const char* pFilePath, void** ppData, size_t* pSize, const ma_allocation_callbacks* pAllocationCallbacks, ma_uint32 allocationType)
+{
+    ma_result result;
+    ma_vfs_file file;
+    ma_file_info info;
+    void* pData;
+    size_t bytesRead;
+
+    (void)allocationType;
+
+    if (ppData != NULL) {
+        *ppData = NULL;
+    }
+    if (pSize != NULL) {
+        *pSize = 0;
+    }
+
+    if (ppData == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    result = ma_vfs_open(pVFS, pFilePath, MA_OPEN_MODE_READ, &file);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_vfs_info(pVFS, file, &info);
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, file);
+        return result;
+    }
+
+    if (info.sizeInBytes > MA_SIZE_MAX) {
+        ma_vfs_close(pVFS, file);
+        return MA_TOO_BIG;
+    }
+
+    pData = ma__malloc_from_callbacks((size_t)info.sizeInBytes, pAllocationCallbacks);  /* Safe cast. */
+    if (pData == NULL) {
+        ma_vfs_close(pVFS, file);
+        return result;
+    }
+
+    result = ma_vfs_read(pVFS, file, pData, (size_t)info.sizeInBytes, &bytesRead);  /* Safe cast. */
+    ma_vfs_close(pVFS, file);
+
+    if (result != MA_SUCCESS) {
+        ma__free_from_callbacks(pData, pAllocationCallbacks);
+        return result;
+    }
+
+    if (pSize != NULL) {
+        *pSize = bytesRead;
+    }
+
+    MA_ASSERT(ppData != NULL);
+    *ppData = pData;
+
+    return MA_SUCCESS;
+}
+
+ma_result ma_vfs_open_and_read_file(ma_vfs* pVFS, const char* pFilePath, void** ppData, size_t* pSize, const ma_allocation_callbacks* pAllocationCallbacks)
+{
+    return ma_vfs_open_and_read_file_ex(pVFS, pFilePath, ppData, pSize, pAllocationCallbacks, 0 /*MA_ALLOCATION_TYPE_GENERAL*/);
+}
+
+
+#if defined(MA_WIN32)
+static void ma_default_vfs__get_open_settings_win32(ma_uint32 openMode, DWORD* pDesiredAccess, DWORD* pShareMode, DWORD* pCreationDisposition)
+{
+    *pDesiredAccess = 0;
+    if ((openMode & MA_OPEN_MODE_READ) != 0) {
+        *pDesiredAccess |= GENERIC_READ;
+    }
+    if ((openMode & MA_OPEN_MODE_WRITE) != 0) {
+        *pDesiredAccess |= GENERIC_WRITE;
+    }
+
+    *pShareMode = 0;
+    if ((openMode & MA_OPEN_MODE_READ) != 0) {
+        *pShareMode |= FILE_SHARE_READ;
+    }
+
+    if ((openMode & MA_OPEN_MODE_WRITE) != 0) {
+        *pCreationDisposition = CREATE_ALWAYS;  /* Opening in write mode. Truncate. */
+    } else {
+        *pCreationDisposition = OPEN_EXISTING;  /* Opening in read mode. File must exist. */
+    }
+}
+
+static ma_result ma_default_vfs_open__win32(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    HANDLE hFile;
+    DWORD dwDesiredAccess;
+    DWORD dwShareMode;
+    DWORD dwCreationDisposition;
+
+    (void)pVFS;
+
+    ma_default_vfs__get_open_settings_win32(openMode, &dwDesiredAccess, &dwShareMode, &dwCreationDisposition);
+
+    hFile = CreateFileA(pFilePath, dwDesiredAccess, dwShareMode, NULL, dwCreationDisposition, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    *pFile = hFile;
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_open_w__win32(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    HANDLE hFile;
+    DWORD dwDesiredAccess;
+    DWORD dwShareMode;
+    DWORD dwCreationDisposition;
+
+    (void)pVFS;
+
+    ma_default_vfs__get_open_settings_win32(openMode, &dwDesiredAccess, &dwShareMode, &dwCreationDisposition);
+
+    hFile = CreateFileW(pFilePath, dwDesiredAccess, dwShareMode, NULL, dwCreationDisposition, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    *pFile = hFile;
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_close__win32(ma_vfs* pVFS, ma_vfs_file file)
+{
+    (void)pVFS;
+
+    if (CloseHandle((HANDLE)file) == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+
+static ma_result ma_default_vfs_read__win32(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead)
+{
+    ma_result result = MA_SUCCESS;
+    size_t totalBytesRead;
+
+    (void)pVFS;
+
+    totalBytesRead = 0;
+    while (totalBytesRead < sizeInBytes) {
+        size_t bytesRemaining;
+        DWORD bytesToRead;
+        DWORD bytesRead;
+        BOOL readResult;
+
+        bytesRemaining = sizeInBytes - totalBytesRead;
+        if (bytesRemaining > 0xFFFFFFFF) {
+            bytesToRead = 0xFFFFFFFF;
+        } else {
+            bytesToRead = (DWORD)bytesRemaining;
+        }
+
+        readResult = ReadFile((HANDLE)file, ma_offset_ptr(pDst, totalBytesRead), bytesToRead, &bytesRead, NULL);
+        totalBytesRead += bytesRead;
+
+        if (bytesRead < bytesToRead || (readResult == 1 && bytesRead == 0)) {
+            break;  /* EOF */
+        }
+
+        if (readResult == 0) {
+            result = ma_result_from_GetLastError(GetLastError());
+            break;
+        }
+    }
+
+    if (pBytesRead != NULL) {
+        *pBytesRead = totalBytesRead;
+    }
+
+    return result;
+}
+
+static ma_result ma_default_vfs_write__win32(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten)
+{
+    ma_result result = MA_SUCCESS;
+    size_t totalBytesWritten;
+
+    (void)pVFS;
+
+    totalBytesWritten = 0;
+    while (totalBytesWritten < sizeInBytes) {
+        size_t bytesRemaining;
+        DWORD bytesToWrite;
+        DWORD bytesWritten;
+        BOOL writeResult;
+
+        bytesRemaining = sizeInBytes - totalBytesWritten;
+        if (bytesRemaining > 0xFFFFFFFF) {
+            bytesToWrite = 0xFFFFFFFF;
+        } else {
+            bytesToWrite = (DWORD)bytesRemaining;
+        }
+
+        writeResult = WriteFile((HANDLE)file, ma_offset_ptr(pSrc, totalBytesWritten), bytesToWrite, &bytesWritten, NULL);
+        totalBytesWritten += bytesWritten;
+
+        if (writeResult == 0) {
+            result = ma_result_from_GetLastError(GetLastError());
+            break;
+        }
+    }
+
+    if (pBytesWritten == NULL) {
+        *pBytesWritten = totalBytesWritten;
+    }
+
+    return result;
+}
+
+#if !defined(WINVER) || WINVER <= 0x0502
+WINBASEAPI BOOL WINAPI SetFilePointerEx(HANDLE hFile, LARGE_INTEGER liDistanceToMove, LARGE_INTEGER* pNewFilePointer, DWORD dwMoveMethod);
+#endif
+
+static ma_result ma_default_vfs_seek__win32(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin)
+{
+    LARGE_INTEGER liDistanceToMove;
+    DWORD dwMoveMethod;
+    BOOL result;
+
+    (void)pVFS;
+
+    liDistanceToMove.QuadPart = offset;
+
+    /*  */ if (origin == ma_seek_origin_current) {
+        dwMoveMethod = FILE_CURRENT;
+    } else if (origin == ma_seek_origin_end) {
+        dwMoveMethod = FILE_END;
+    } else {
+        dwMoveMethod = FILE_BEGIN;
+    }
+
+    result = SetFilePointerEx((HANDLE)file, liDistanceToMove, NULL, dwMoveMethod);
+    if (result == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_tell__win32(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor)
+{
+    LARGE_INTEGER liZero;
+    LARGE_INTEGER liTell;
+    BOOL result;
+
+    (void)pVFS;
+
+    liZero.QuadPart = 0;
+
+    result = SetFilePointerEx((HANDLE)file, liZero, &liTell, FILE_CURRENT);
+    if (result == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    if (pCursor != NULL) {
+        *pCursor = liTell.QuadPart;
+    }
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_info__win32(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo)
+{
+    BY_HANDLE_FILE_INFORMATION fi;
+    BOOL result;
+
+    (void)pVFS;
+
+    result = GetFileInformationByHandle((HANDLE)file, &fi);
+    if (result == 0) {
+        return ma_result_from_GetLastError(GetLastError());
+    }
+
+    pInfo->sizeInBytes = ((ma_uint64)fi.nFileSizeHigh << 32) | ((ma_uint64)fi.nFileSizeLow);
+
+    return MA_SUCCESS;
+}
+#else
+static ma_result ma_default_vfs_open__stdio(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    ma_result result;
+    FILE* pFileStd;
+    const char* pOpenModeStr;
+
+    MA_ASSERT(pFilePath != NULL);
+    MA_ASSERT(openMode  != 0);
+    MA_ASSERT(pFile     != NULL);
+
+    (void)pVFS;
+
+    if ((openMode & MA_OPEN_MODE_READ) != 0) {
+        if ((openMode & MA_OPEN_MODE_WRITE) != 0) {
+            pOpenModeStr = "r+";
+        } else {
+            pOpenModeStr = "rb";
+        }
+    } else {
+        pOpenModeStr = "wb";
+    }
+
+    result = ma_fopen(&pFileStd, pFilePath, pOpenModeStr);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    *pFile = pFileStd;
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_open_w__stdio(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    ma_result result;
+    FILE* pFileStd;
+    const wchar_t* pOpenModeStr;
+
+    MA_ASSERT(pFilePath != NULL);
+    MA_ASSERT(openMode  != 0);
+    MA_ASSERT(pFile     != NULL);
+
+    (void)pVFS;
+
+    if ((openMode & MA_OPEN_MODE_READ) != 0) {
+        if ((openMode & MA_OPEN_MODE_WRITE) != 0) {
+            pOpenModeStr = L"r+";
+        } else {
+            pOpenModeStr = L"rb";
+        }
+    } else {
+        pOpenModeStr = L"wb";
+    }
+
+    result = ma_wfopen(&pFileStd, pFilePath, pOpenModeStr, (pVFS != NULL) ? &((ma_default_vfs*)pVFS)->allocationCallbacks : NULL);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    *pFile = pFileStd;
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_close__stdio(ma_vfs* pVFS, ma_vfs_file file)
+{
+    MA_ASSERT(file != NULL);
+
+    (void)pVFS;
+
+    fclose((FILE*)file);
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_read__stdio(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead)
+{
+    size_t result;
+
+    MA_ASSERT(file != NULL);
+    MA_ASSERT(pDst != NULL);
+
+    (void)pVFS;
+    
+    result = fread(pDst, 1, sizeInBytes, (FILE*)file);
+
+    if (pBytesRead != NULL) {
+        *pBytesRead = result;
+    }
+    
+    if (result != sizeInBytes) {
+        if (feof((FILE*)file)) {
+            return MA_END_OF_FILE;
+        } else {
+            return ma_result_from_errno(ferror((FILE*)file));
+        }
+    }
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_write__stdio(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten)
+{
+    size_t result;
+
+    MA_ASSERT(file != NULL);
+    MA_ASSERT(pSrc != NULL);
+
+    (void)pVFS;
+
+    result = fwrite(pSrc, 1, sizeInBytes, (FILE*)file);
+
+    if (pBytesWritten != NULL) {
+        *pBytesWritten = result;
+    }
+
+    if (result != sizeInBytes) {
+        return ma_result_from_errno(ferror((FILE*)file));
+    }
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_seek__stdio(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin)
+{
+    int result;
+
+    MA_ASSERT(file != NULL);
+
+    (void)pVFS;
+    
+#if defined(_WIN32)
+    #if defined(_MSC_VER) && _MSC_VER > 1200
+        result = _fseeki64((FILE*)file, offset, origin);
+    #else
+        /* No _fseeki64() so restrict to 31 bits. */
+        if (origin > 0x7FFFFFFF) {
+            return MA_OUT_OF_RANGE;
+        }
+
+        result = fseek((FILE*)file, (int)offset, origin);
+    #endif
+#else
+    result = fseek((FILE*)file, (long int)offset, origin);
+#endif
+    if (result != 0) {
+        return MA_ERROR;
+    }
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_tell__stdio(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor)
+{
+    ma_int64 result;
+
+    MA_ASSERT(file    != NULL);
+    MA_ASSERT(pCursor != NULL);
+
+    (void)pVFS;
+
+#if defined(_WIN32)
+    #if defined(_MSC_VER) && _MSC_VER > 1200
+        result = _ftelli64((FILE*)file);
+    #else
+        result = ftell((FILE*)file);
+    #endif
+#else
+    result = ftell((FILE*)file);
+#endif
+
+    *pCursor = result;
+
+    return MA_SUCCESS;
+}
+
+static ma_result ma_default_vfs_info__stdio(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo)
+{
+    int fd;
+    struct stat info;
+
+    MA_ASSERT(file  != NULL);
+    MA_ASSERT(pInfo != NULL);
+
+    (void)pVFS;
+
+#if defined(_MSC_VER)
+    fd = _fileno((FILE*)file);
+#else
+    fd =  fileno((FILE*)file);
+#endif
+
+    if (fstat(fd, &info) != 0) {
+        return ma_result_from_errno(errno);
+    }
+
+    pInfo->sizeInBytes = info.st_size;
+
+    return MA_SUCCESS;
+}
+#endif
+
+
+static ma_result ma_default_vfs_open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    if (pFile == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pFile = NULL;
+
+    if (pFilePath == NULL || openMode == 0) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_open__win32(pVFS, pFilePath, openMode, pFile);
+#else
+    return ma_default_vfs_open__stdio(pVFS, pFilePath, openMode, pFile);
+#endif
+}
+
+static ma_result ma_default_vfs_open_w(ma_vfs* pVFS, const wchar_t* pFilePath, ma_uint32 openMode, ma_vfs_file* pFile)
+{
+    if (pFile == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pFile = NULL;
+
+    if (pFilePath == NULL || openMode == 0) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_open_w__win32(pVFS, pFilePath, openMode, pFile);
+#else
+    return ma_default_vfs_open_w__stdio(pVFS, pFilePath, openMode, pFile);
+#endif
+}
+
+static ma_result ma_default_vfs_close(ma_vfs* pVFS, ma_vfs_file file)
+{
+    if (file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_close__win32(pVFS, file);
+#else
+    return ma_default_vfs_close__stdio(pVFS, file);
+#endif
+}
+
+static ma_result ma_default_vfs_read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size_t sizeInBytes, size_t* pBytesRead)
+{
+    if (file == NULL || pDst == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_read__win32(pVFS, file, pDst, sizeInBytes, pBytesRead);
+#else
+    return ma_default_vfs_read__stdio(pVFS, file, pDst, sizeInBytes, pBytesRead);
+#endif
+}
+
+static ma_result ma_default_vfs_write(ma_vfs* pVFS, ma_vfs_file file, const void* pSrc, size_t sizeInBytes, size_t* pBytesWritten)
+{
+    if (file == NULL || pSrc == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_write__win32(pVFS, file, pSrc, sizeInBytes, pBytesWritten);
+#else
+    return ma_default_vfs_write__stdio(pVFS, file, pSrc, sizeInBytes, pBytesWritten);
+#endif
+}
+
+static ma_result ma_default_vfs_seek(ma_vfs* pVFS, ma_vfs_file file, ma_int64 offset, ma_seek_origin origin)
+{
+    if (file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_seek__win32(pVFS, file, offset, origin);
+#else
+    return ma_default_vfs_seek__stdio(pVFS, file, offset, origin);
+#endif
+}
+
+static ma_result ma_default_vfs_tell(ma_vfs* pVFS, ma_vfs_file file, ma_int64* pCursor)
+{
+    if (pCursor == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    *pCursor = 0;
+
+    if (file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_tell__win32(pVFS, file, pCursor);
+#else
+    return ma_default_vfs_tell__stdio(pVFS, file, pCursor);
+#endif
+}
+
+static ma_result ma_default_vfs_info(ma_vfs* pVFS, ma_vfs_file file, ma_file_info* pInfo)
+{
+    if (pInfo == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    MA_ZERO_OBJECT(pInfo);
+
+    if (file == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+#if defined(MA_WIN32)
+    return ma_default_vfs_info__win32(pVFS, file, pInfo);
+#else
+    return ma_default_vfs_info__stdio(pVFS, file, pInfo);
+#endif
+}
+
+
+MA_API ma_result ma_default_vfs_init(ma_default_vfs* pVFS, const ma_allocation_callbacks* pAllocationCallbacks)
+{
+    if (pVFS == NULL) {
+        return MA_INVALID_ARGS;
+    }
+
+    pVFS->cb.onOpen  = ma_default_vfs_open;
+    pVFS->cb.onOpenW = ma_default_vfs_open_w;
+    pVFS->cb.onClose = ma_default_vfs_close;
+    pVFS->cb.onRead  = ma_default_vfs_read;
+    pVFS->cb.onWrite = ma_default_vfs_write;
+    pVFS->cb.onSeek  = ma_default_vfs_seek;
+    pVFS->cb.onTell  = ma_default_vfs_tell;
+    pVFS->cb.onInfo  = ma_default_vfs_info;
+    ma_allocation_callbacks_init_copy(&pVFS->allocationCallbacks, pAllocationCallbacks);
+
+    return MA_SUCCESS;
+}
 
 
 /**************************************************************************************************************************************************************
@@ -40598,6 +41800,121 @@ static ma_result ma_decoder_init_flac__internal(const ma_decoder_config* pConfig
 }
 #endif  /* dr_flac_h */
 
+/* MP3 */
+#ifdef dr_mp3_h
+#define MA_HAS_MP3
+
+static size_t ma_decoder_internal_on_read__mp3(void* pUserData, void* pBufferOut, size_t bytesToRead)
+{
+    ma_decoder* pDecoder = (ma_decoder*)pUserData;
+    MA_ASSERT(pDecoder != NULL);
+
+    return ma_decoder_read_bytes(pDecoder, pBufferOut, bytesToRead);
+}
+
+static drmp3_bool32 ma_decoder_internal_on_seek__mp3(void* pUserData, int offset, drmp3_seek_origin origin)
+{
+    ma_decoder* pDecoder = (ma_decoder*)pUserData;
+    MA_ASSERT(pDecoder != NULL);
+
+    return ma_decoder_seek_bytes(pDecoder, offset, (origin == drmp3_seek_origin_start) ? ma_seek_origin_start : ma_seek_origin_current);
+}
+
+static ma_uint64 ma_decoder_internal_on_read_pcm_frames__mp3(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount)
+{
+    drmp3* pMP3;
+
+    MA_ASSERT(pDecoder   != NULL);
+    MA_ASSERT(pFramesOut != NULL);
+
+    pMP3 = (drmp3*)pDecoder->pInternalDecoder;
+    MA_ASSERT(pMP3 != NULL);
+
+#if defined(DR_MP3_FLOAT_OUTPUT)
+    MA_ASSERT(pDecoder->internalFormat == ma_format_f32);
+    return drmp3_read_pcm_frames_f32(pMP3, frameCount, (float*)pFramesOut);
+#else
+    MA_ASSERT(pDecoder->internalFormat == ma_format_s16);
+    return drmp3_read_pcm_frames_s16(pMP3, frameCount, (drmp3_int16*)pFramesOut);
+#endif
+}
+
+static ma_result ma_decoder_internal_on_seek_to_pcm_frame__mp3(ma_decoder* pDecoder, ma_uint64 frameIndex)
+{
+    drmp3* pMP3;
+    drmp3_bool32 result;
+
+    pMP3 = (drmp3*)pDecoder->pInternalDecoder;
+    MA_ASSERT(pMP3 != NULL);
+
+    result = drmp3_seek_to_pcm_frame(pMP3, frameIndex);
+    if (result) {
+        return MA_SUCCESS;
+    } else {
+        return MA_ERROR;
+    }
+}
+
+static ma_result ma_decoder_internal_on_uninit__mp3(ma_decoder* pDecoder)
+{
+    drmp3_uninit((drmp3*)pDecoder->pInternalDecoder);
+    ma__free_from_callbacks(pDecoder->pInternalDecoder, &pDecoder->allocationCallbacks);
+    return MA_SUCCESS;
+}
+
+static ma_uint64 ma_decoder_internal_on_get_length_in_pcm_frames__mp3(ma_decoder* pDecoder)
+{
+    return drmp3_get_pcm_frame_count((drmp3*)pDecoder->pInternalDecoder);
+}
+
+static ma_result ma_decoder_init_mp3__internal(const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    drmp3* pMP3;
+    drmp3_allocation_callbacks allocationCallbacks;
+
+    MA_ASSERT(pConfig != NULL);
+    MA_ASSERT(pDecoder != NULL);
+
+    pMP3 = (drmp3*)ma__malloc_from_callbacks(sizeof(*pMP3), &pDecoder->allocationCallbacks);
+    if (pMP3 == NULL) {
+        return MA_OUT_OF_MEMORY;
+    }
+
+    allocationCallbacks.pUserData = pDecoder->allocationCallbacks.pUserData;
+    allocationCallbacks.onMalloc  = pDecoder->allocationCallbacks.onMalloc;
+    allocationCallbacks.onRealloc = pDecoder->allocationCallbacks.onRealloc;
+    allocationCallbacks.onFree    = pDecoder->allocationCallbacks.onFree;
+
+    /*
+    Try opening the decoder first. We always use whatever dr_mp3 reports for channel count and sample rate. The format is determined by
+    the presence of DR_MP3_FLOAT_OUTPUT.
+    */
+    if (!drmp3_init(pMP3, ma_decoder_internal_on_read__mp3, ma_decoder_internal_on_seek__mp3, pDecoder, &allocationCallbacks)) {
+        ma__free_from_callbacks(pMP3, &pDecoder->allocationCallbacks);
+        return MA_ERROR;
+    }
+
+    /* If we get here it means we successfully initialized the MP3 decoder. We can now initialize the rest of the ma_decoder. */
+    pDecoder->onReadPCMFrames        = ma_decoder_internal_on_read_pcm_frames__mp3;
+    pDecoder->onSeekToPCMFrame       = ma_decoder_internal_on_seek_to_pcm_frame__mp3;
+    pDecoder->onUninit               = ma_decoder_internal_on_uninit__mp3;
+    pDecoder->onGetLengthInPCMFrames = ma_decoder_internal_on_get_length_in_pcm_frames__mp3;
+    pDecoder->pInternalDecoder       = pMP3;
+
+    /* Internal format. */
+#if defined(DR_MP3_FLOAT_OUTPUT)
+    pDecoder->internalFormat     = ma_format_f32;
+#else
+    pDecoder->internalFormat     = ma_format_s16;
+#endif
+    pDecoder->internalChannels   = pMP3->channels;
+    pDecoder->internalSampleRate = pMP3->sampleRate;
+    ma_get_standard_channel_map(ma_standard_channel_map_default, pDecoder->internalChannels, pDecoder->internalChannelMap);
+
+    return MA_SUCCESS;
+}
+#endif  /* dr_mp3_h */
+
 /* Vorbis */
 #ifdef STB_VORBIS_INCLUDE_STB_VORBIS_H
 #define MA_HAS_VORBIS
@@ -40629,18 +41946,23 @@ static ma_uint64 ma_vorbis_decoder_read_pcm_frames(ma_vorbis_decoder* pVorbis, m
     totalFramesRead = 0;
     while (frameCount > 0) {
         /* Read from the in-memory buffer first. */
-        while (pVorbis->framesRemaining > 0 && frameCount > 0) {
-            ma_uint32 iChannel;
-            for (iChannel = 0; iChannel < pDecoder->internalChannels; ++iChannel) {
-                pFramesOutF[0] = pVorbis->ppPacketData[iChannel][pVorbis->framesConsumed];
-                pFramesOutF += 1;
-            }
+        ma_uint32 framesToReadFromCache = (ma_uint32)ma_min(pVorbis->framesRemaining, frameCount);  /* Safe cast because pVorbis->framesRemaining is 32-bit. */
 
-            pVorbis->framesConsumed  += 1;
-            pVorbis->framesRemaining -= 1;
-            frameCount               -= 1;
-            totalFramesRead          += 1;
+        if (pFramesOut != NULL) {
+            ma_uint64 iFrame;
+            for (iFrame = 0; iFrame < framesToReadFromCache; iFrame += 1) {
+                ma_uint32 iChannel;
+                for (iChannel = 0; iChannel < pDecoder->internalChannels; ++iChannel) {
+                    pFramesOutF[iChannel] = pVorbis->ppPacketData[iChannel][pVorbis->framesConsumed+iFrame];   
+                }
+                pFramesOutF += pDecoder->internalChannels;
+            }
         }
+
+        pVorbis->framesConsumed  += framesToReadFromCache;
+        pVorbis->framesRemaining -= framesToReadFromCache;
+        frameCount               -= framesToReadFromCache;
+        totalFramesRead          += framesToReadFromCache;
 
         if (frameCount == 0) {
             break;
@@ -40714,6 +42036,8 @@ static ma_result ma_vorbis_decoder_seek_to_pcm_frame(ma_vorbis_decoder* pVorbis,
     This is terribly inefficient because stb_vorbis does not have a good seeking solution with it's push API. Currently this just performs
     a full decode right from the start of the stream. Later on I'll need to write a layer that goes through all of the Ogg pages until we
     find the one containing the sample we need. Then we know exactly where to seek for stb_vorbis.
+
+    TODO: Use seeking logic documented for stb_vorbis_flush_pushdata().
     */
     if (!ma_decoder_seek_bytes(pDecoder, 0, ma_seek_origin_start)) {
         return MA_ERROR;
@@ -40891,121 +42215,6 @@ static ma_result ma_decoder_init_vorbis__internal(const ma_decoder_config* pConf
 }
 #endif  /* STB_VORBIS_INCLUDE_STB_VORBIS_H */
 
-/* MP3 */
-#ifdef dr_mp3_h
-#define MA_HAS_MP3
-
-static size_t ma_decoder_internal_on_read__mp3(void* pUserData, void* pBufferOut, size_t bytesToRead)
-{
-    ma_decoder* pDecoder = (ma_decoder*)pUserData;
-    MA_ASSERT(pDecoder != NULL);
-
-    return ma_decoder_read_bytes(pDecoder, pBufferOut, bytesToRead);
-}
-
-static drmp3_bool32 ma_decoder_internal_on_seek__mp3(void* pUserData, int offset, drmp3_seek_origin origin)
-{
-    ma_decoder* pDecoder = (ma_decoder*)pUserData;
-    MA_ASSERT(pDecoder != NULL);
-
-    return ma_decoder_seek_bytes(pDecoder, offset, (origin == drmp3_seek_origin_start) ? ma_seek_origin_start : ma_seek_origin_current);
-}
-
-static ma_uint64 ma_decoder_internal_on_read_pcm_frames__mp3(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount)
-{
-    drmp3* pMP3;
-
-    MA_ASSERT(pDecoder   != NULL);
-    MA_ASSERT(pFramesOut != NULL);
-
-    pMP3 = (drmp3*)pDecoder->pInternalDecoder;
-    MA_ASSERT(pMP3 != NULL);
-
-#if defined(DR_MP3_FLOAT_OUTPUT)
-    MA_ASSERT(pDecoder->internalFormat == ma_format_f32);
-    return drmp3_read_pcm_frames_f32(pMP3, frameCount, (float*)pFramesOut);
-#else
-    MA_ASSERT(pDecoder->internalFormat == ma_format_s16);
-    return drmp3_read_pcm_frames_s16(pMP3, frameCount, (drmp3_int16*)pFramesOut);
-#endif
-}
-
-static ma_result ma_decoder_internal_on_seek_to_pcm_frame__mp3(ma_decoder* pDecoder, ma_uint64 frameIndex)
-{
-    drmp3* pMP3;
-    drmp3_bool32 result;
-
-    pMP3 = (drmp3*)pDecoder->pInternalDecoder;
-    MA_ASSERT(pMP3 != NULL);
-
-    result = drmp3_seek_to_pcm_frame(pMP3, frameIndex);
-    if (result) {
-        return MA_SUCCESS;
-    } else {
-        return MA_ERROR;
-    }
-}
-
-static ma_result ma_decoder_internal_on_uninit__mp3(ma_decoder* pDecoder)
-{
-    drmp3_uninit((drmp3*)pDecoder->pInternalDecoder);
-    ma__free_from_callbacks(pDecoder->pInternalDecoder, &pDecoder->allocationCallbacks);
-    return MA_SUCCESS;
-}
-
-static ma_uint64 ma_decoder_internal_on_get_length_in_pcm_frames__mp3(ma_decoder* pDecoder)
-{
-    return drmp3_get_pcm_frame_count((drmp3*)pDecoder->pInternalDecoder);
-}
-
-static ma_result ma_decoder_init_mp3__internal(const ma_decoder_config* pConfig, ma_decoder* pDecoder)
-{
-    drmp3* pMP3;
-    drmp3_allocation_callbacks allocationCallbacks;
-
-    MA_ASSERT(pConfig != NULL);
-    MA_ASSERT(pDecoder != NULL);
-
-    pMP3 = (drmp3*)ma__malloc_from_callbacks(sizeof(*pMP3), &pDecoder->allocationCallbacks);
-    if (pMP3 == NULL) {
-        return MA_OUT_OF_MEMORY;
-    }
-
-    allocationCallbacks.pUserData = pDecoder->allocationCallbacks.pUserData;
-    allocationCallbacks.onMalloc  = pDecoder->allocationCallbacks.onMalloc;
-    allocationCallbacks.onRealloc = pDecoder->allocationCallbacks.onRealloc;
-    allocationCallbacks.onFree    = pDecoder->allocationCallbacks.onFree;
-
-    /*
-    Try opening the decoder first. We always use whatever dr_mp3 reports for channel count and sample rate. The format is determined by
-    the presence of DR_MP3_FLOAT_OUTPUT.
-    */
-    if (!drmp3_init(pMP3, ma_decoder_internal_on_read__mp3, ma_decoder_internal_on_seek__mp3, pDecoder, &allocationCallbacks)) {
-        ma__free_from_callbacks(pMP3, &pDecoder->allocationCallbacks);
-        return MA_ERROR;
-    }
-
-    /* If we get here it means we successfully initialized the MP3 decoder. We can now initialize the rest of the ma_decoder. */
-    pDecoder->onReadPCMFrames        = ma_decoder_internal_on_read_pcm_frames__mp3;
-    pDecoder->onSeekToPCMFrame       = ma_decoder_internal_on_seek_to_pcm_frame__mp3;
-    pDecoder->onUninit               = ma_decoder_internal_on_uninit__mp3;
-    pDecoder->onGetLengthInPCMFrames = ma_decoder_internal_on_get_length_in_pcm_frames__mp3;
-    pDecoder->pInternalDecoder       = pMP3;
-
-    /* Internal format. */
-#if defined(DR_MP3_FLOAT_OUTPUT)
-    pDecoder->internalFormat     = ma_format_f32;
-#else
-    pDecoder->internalFormat     = ma_format_s16;
-#endif
-    pDecoder->internalChannels   = pMP3->channels;
-    pDecoder->internalSampleRate = pMP3->sampleRate;
-    ma_get_standard_channel_map(ma_standard_channel_map_default, pDecoder->internalChannels, pDecoder->internalChannelMap);
-
-    return MA_SUCCESS;
-}
-#endif  /* dr_mp3_h */
-
 /* Raw */
 static ma_uint64 ma_decoder_internal_on_read_pcm_frames__raw(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount)
 {
@@ -41013,9 +42222,7 @@ static ma_uint64 ma_decoder_internal_on_read_pcm_frames__raw(ma_decoder* pDecode
     ma_uint64 totalFramesRead;
     void* pRunningFramesOut;
 
-
-    MA_ASSERT(pDecoder   != NULL);
-    MA_ASSERT(pFramesOut != NULL);
+    MA_ASSERT(pDecoder != NULL);
 
     /* For raw decoding we just read directly from the decoder's callbacks. */
     bpf = ma_get_bytes_per_frame(pDecoder->internalFormat, pDecoder->internalChannels);
@@ -41026,14 +42233,41 @@ static ma_uint64 ma_decoder_internal_on_read_pcm_frames__raw(ma_decoder* pDecode
     while (totalFramesRead < frameCount) {
         ma_uint64 framesReadThisIteration;
         ma_uint64 framesToReadThisIteration = (frameCount - totalFramesRead);
-        if (framesToReadThisIteration > MA_SIZE_MAX) {
-            framesToReadThisIteration = MA_SIZE_MAX;
+        if (framesToReadThisIteration > 0x7FFFFFFF/bpf) {
+            framesToReadThisIteration = 0x7FFFFFFF/bpf;
         }
 
-        framesReadThisIteration = ma_decoder_read_bytes(pDecoder, pRunningFramesOut, (size_t)framesToReadThisIteration * bpf) / bpf;    /* Safe cast to size_t. */
+        if (pFramesOut != NULL) {
+            framesReadThisIteration = ma_decoder_read_bytes(pDecoder, pRunningFramesOut, (size_t)framesToReadThisIteration * bpf) / bpf;    /* Safe cast to size_t. */
+            pRunningFramesOut = ma_offset_ptr(pRunningFramesOut, framesReadThisIteration * bpf);
+        } else {
+            /* We'll first try seeking. If this fails it means the end was reached and we'll to do a read-and-discard slow path to get the exact amount. */
+            if (ma_decoder_seek_bytes(pDecoder, (int)framesToReadThisIteration, ma_seek_origin_current)) {
+                framesReadThisIteration = framesToReadThisIteration;
+            } else {
+                /* Slow path. Need to fall back to a read-and-discard. This is required so we can get the exact number of remaining. */
+                ma_uint8 buffer[MA_DATA_CONVERTER_STACK_BUFFER_SIZE];
+                ma_uint32 bufferCap = sizeof(buffer) / bpf;
 
-        totalFramesRead  += framesReadThisIteration;
-        pRunningFramesOut = ma_offset_ptr(pRunningFramesOut, framesReadThisIteration * bpf);
+                framesReadThisIteration = 0;
+                while (framesReadThisIteration < framesToReadThisIteration) {
+                    ma_uint64 framesReadNow;
+                    ma_uint64 framesToReadNow = framesToReadThisIteration - framesReadThisIteration;
+                    if (framesToReadNow > bufferCap) {
+                        framesToReadNow = bufferCap;
+                    }
+
+                    framesReadNow = ma_decoder_read_bytes(pDecoder, buffer, (size_t)(framesToReadNow * bpf)) / bpf; /* Safe cast. */
+                    framesReadThisIteration += framesReadNow;
+
+                    if (framesReadNow < framesToReadNow) {
+                        break;  /* The end has been reached. */
+                    }
+                }
+            }
+        }
+
+        totalFramesRead += framesReadThisIteration;
 
         if (framesReadThisIteration < framesToReadThisIteration) {
             break;  /* Done. */
@@ -41132,9 +42366,19 @@ static ma_result ma_decoder__init_allocation_callbacks(const ma_decoder_config* 
     }
 }
 
-static ma_uint64 ma_decoder__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount)
+static ma_result ma_decoder__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
-    return ma_decoder_read_pcm_frames((ma_decoder*)pDataSource, pFramesOut, frameCount);
+    ma_uint64 framesRead = ma_decoder_read_pcm_frames((ma_decoder*)pDataSource, pFramesOut, frameCount);
+
+    if (pFramesRead != NULL) {
+        *pFramesRead = framesRead;
+    }
+
+    if (framesRead < frameCount) {
+        return MA_AT_END;
+    }
+
+    return MA_SUCCESS;
 }
 
 static ma_result ma_decoder__data_source_on_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
@@ -41172,8 +42416,8 @@ static ma_result ma_decoder__preinit(ma_decoder_read_proc onRead, ma_decoder_see
     pDecoder->ds.onSeek          = ma_decoder__data_source_on_seek;
     pDecoder->ds.onGetDataFormat = ma_decoder__data_source_on_get_data_format;
 
-    pDecoder->onRead = onRead;
-    pDecoder->onSeek = onSeek;
+    pDecoder->onRead    = onRead;
+    pDecoder->onSeek    = onSeek;
     pDecoder->pUserData = pUserData;
 
     result = ma_decoder__init_allocation_callbacks(pConfig, pDecoder);
@@ -41198,6 +42442,7 @@ static ma_result ma_decoder__postinit(const ma_decoder_config* pConfig, ma_decod
 
 MA_API ma_result ma_decoder_init_wav(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
+#ifdef MA_HAS_WAV
     ma_decoder_config config;
     ma_result result;
 
@@ -41208,44 +42453,25 @@ MA_API ma_result ma_decoder_init_wav(ma_decoder_read_proc onRead, ma_decoder_see
         return result;
     }
 
-#ifdef MA_HAS_WAV
     result = ma_decoder_init_wav__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)onRead;
+    (void)onSeek;
+    (void)pUserData;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_flac(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_decoder_config config;
-    ma_result result;
-
-    config = ma_decoder_config_init_copy(pConfig);
-
-    result = ma_decoder__preinit(onRead, onSeek, pUserData, &config, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
 #ifdef MA_HAS_FLAC
-    result = ma_decoder_init_flac__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder__postinit(&config, pDecoder);
-}
-
-MA_API ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
-{
     ma_decoder_config config;
     ma_result result;
 
@@ -41256,20 +42482,25 @@ MA_API ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_
         return result;
     }
 
-#ifdef MA_HAS_VORBIS
-    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
+    result = ma_decoder_init_flac__internal(&config, pDecoder);
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)onRead;
+    (void)onSeek;
+    (void)pUserData;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
+#ifdef MA_HAS_MP3
     ma_decoder_config config;
     ma_result result;
 
@@ -41280,16 +42511,49 @@ MA_API ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_see
         return result;
     }
 
-#ifdef MA_HAS_MP3
     result = ma_decoder_init_mp3__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)onRead;
+    (void)onSeek;
+    (void)pUserData;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_VORBIS
+    ma_decoder_config config;
+    ma_result result;
+
+    config = ma_decoder_config_init_copy(pConfig);
+
+    result = ma_decoder__preinit(onRead, onSeek, pUserData, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)onRead;
+    (void)onSeek;
+    (void)pUserData;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_raw(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder)
@@ -41344,17 +42608,17 @@ static ma_result ma_decoder_init__internal(ma_decoder_read_proc onRead, ma_decod
         }
     }
 #endif
-#ifdef MA_HAS_VORBIS
+#ifdef MA_HAS_MP3
     if (result != MA_SUCCESS) {
-        result = ma_decoder_init_vorbis__internal(pConfig, pDecoder);
+        result = ma_decoder_init_mp3__internal(pConfig, pDecoder);
         if (result != MA_SUCCESS) {
             onSeek(pDecoder, 0, ma_seek_origin_start);
         }
     }
 #endif
-#ifdef MA_HAS_MP3
+#ifdef MA_HAS_VORBIS
     if (result != MA_SUCCESS) {
-        result = ma_decoder_init_mp3__internal(pConfig, pDecoder);
+        result = ma_decoder_init_vorbis__internal(pConfig, pDecoder);
         if (result != MA_SUCCESS) {
             onSeek(pDecoder, 0, ma_seek_origin_start);
         }
@@ -41388,16 +42652,16 @@ static size_t ma_decoder__on_read_memory(ma_decoder* pDecoder, void* pBufferOut,
 {
     size_t bytesRemaining;
 
-    MA_ASSERT(pDecoder->memory.dataSize >= pDecoder->memory.currentReadPos);
+    MA_ASSERT(pDecoder->backend.memory.dataSize >= pDecoder->backend.memory.currentReadPos);
 
-    bytesRemaining = pDecoder->memory.dataSize - pDecoder->memory.currentReadPos;
+    bytesRemaining = pDecoder->backend.memory.dataSize - pDecoder->backend.memory.currentReadPos;
     if (bytesToRead > bytesRemaining) {
         bytesToRead = bytesRemaining;
     }
 
     if (bytesToRead > 0) {
-        MA_COPY_MEMORY(pBufferOut, pDecoder->memory.pData + pDecoder->memory.currentReadPos, bytesToRead);
-        pDecoder->memory.currentReadPos += bytesToRead;
+        MA_COPY_MEMORY(pBufferOut, pDecoder->backend.memory.pData + pDecoder->backend.memory.currentReadPos, bytesToRead);
+        pDecoder->backend.memory.currentReadPos += bytesToRead;
     }
 
     return bytesToRead;
@@ -41407,22 +42671,22 @@ static ma_bool32 ma_decoder__on_seek_memory(ma_decoder* pDecoder, int byteOffset
 {
     if (origin == ma_seek_origin_current) {
         if (byteOffset > 0) {
-            if (pDecoder->memory.currentReadPos + byteOffset > pDecoder->memory.dataSize) {
-                byteOffset = (int)(pDecoder->memory.dataSize - pDecoder->memory.currentReadPos);  /* Trying to seek too far forward. */
+            if (pDecoder->backend.memory.currentReadPos + byteOffset > pDecoder->backend.memory.dataSize) {
+                byteOffset = (int)(pDecoder->backend.memory.dataSize - pDecoder->backend.memory.currentReadPos);  /* Trying to seek too far forward. */
             }
         } else {
-            if (pDecoder->memory.currentReadPos < (size_t)-byteOffset) {
-                byteOffset = -(int)pDecoder->memory.currentReadPos;  /* Trying to seek too far backwards. */
+            if (pDecoder->backend.memory.currentReadPos < (size_t)-byteOffset) {
+                byteOffset = -(int)pDecoder->backend.memory.currentReadPos;  /* Trying to seek too far backwards. */
             }
         }
 
         /* This will never underflow thanks to the clamps above. */
-        pDecoder->memory.currentReadPos += byteOffset;
+        pDecoder->backend.memory.currentReadPos += byteOffset;
     } else {
-        if ((ma_uint32)byteOffset <= pDecoder->memory.dataSize) {
-            pDecoder->memory.currentReadPos = byteOffset;
+        if ((ma_uint32)byteOffset <= pDecoder->backend.memory.dataSize) {
+            pDecoder->backend.memory.currentReadPos = byteOffset;
         } else {
-            pDecoder->memory.currentReadPos = pDecoder->memory.dataSize;  /* Trying to seek too far forward. */
+            pDecoder->backend.memory.currentReadPos = pDecoder->backend.memory.dataSize;  /* Trying to seek too far forward. */
         }
     }
 
@@ -41440,9 +42704,9 @@ static ma_result ma_decoder__preinit_memory(const void* pData, size_t dataSize, 
         return MA_INVALID_ARGS;
     }
 
-    pDecoder->memory.pData = (const ma_uint8*)pData;
-    pDecoder->memory.dataSize = dataSize;
-    pDecoder->memory.currentReadPos = 0;
+    pDecoder->backend.memory.pData = (const ma_uint8*)pData;
+    pDecoder->backend.memory.dataSize = dataSize;
+    pDecoder->backend.memory.currentReadPos = 0;
 
     (void)pConfig;
     return MA_SUCCESS;
@@ -41465,6 +42729,7 @@ MA_API ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, cons
 
 MA_API ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
+#ifdef MA_HAS_WAV
     ma_decoder_config config;
     ma_result result;
 
@@ -41475,44 +42740,24 @@ MA_API ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, 
         return result;
     }
 
-#ifdef MA_HAS_WAV
     result = ma_decoder_init_wav__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)pData;
+    (void)dataSize;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_memory_flac(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_decoder_config config;
-    ma_result result;
-
-    config = ma_decoder_config_init_copy(pConfig);  /* Make sure the config is not NULL. */
-
-    result = ma_decoder__preinit_memory(pData, dataSize, &config, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
 #ifdef MA_HAS_FLAC
-    result = ma_decoder_init_flac__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder__postinit(&config, pDecoder);
-}
-
-MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
-{
     ma_decoder_config config;
     ma_result result;
 
@@ -41523,20 +42768,24 @@ MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSiz
         return result;
     }
 
-#ifdef MA_HAS_VORBIS
-    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
+    result = ma_decoder_init_flac__internal(&config, pDecoder);
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)pData;
+    (void)dataSize;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
+#ifdef MA_HAS_MP3
     ma_decoder_config config;
     ma_result result;
 
@@ -41547,16 +42796,47 @@ MA_API ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, 
         return result;
     }
 
-#ifdef MA_HAS_MP3
     result = ma_decoder_init_mp3__internal(&config, pDecoder);
-#else
-    result = MA_NO_BACKEND;
-#endif
     if (result != MA_SUCCESS) {
         return result;
     }
 
     return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)pData;
+    (void)dataSize;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_VORBIS
+    ma_decoder_config config;
+    ma_result result;
+
+    config = ma_decoder_config_init_copy(pConfig);  /* Make sure the config is not NULL. */
+
+    result = ma_decoder__preinit_memory(pData, dataSize, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    return ma_decoder__postinit(&config, pDecoder);
+#else
+    (void)pData;
+    (void)dataSize;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
 }
 
 MA_API ma_result ma_decoder_init_memory_raw(const void* pData, size_t dataSize, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder)
@@ -41747,240 +43027,510 @@ static ma_bool32 ma_path_extension_equal_w(const wchar_t* path, const wchar_t* e
 }
 
 
-static size_t ma_decoder__on_read_stdio(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead)
+
+static size_t ma_decoder__on_read_vfs(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead)
 {
-    return fread(pBufferOut, 1, bytesToRead, (FILE*)pDecoder->pUserData);
+    size_t bytesRead;
+
+    MA_ASSERT(pDecoder   != NULL);
+    MA_ASSERT(pBufferOut != NULL);
+
+    if (pDecoder->backend.vfs.pVFS == NULL) {
+        ma_default_vfs_read(NULL, pDecoder->backend.vfs.file, pBufferOut, bytesToRead, &bytesRead);
+    } else {
+        ma_vfs_read(pDecoder->backend.vfs.pVFS, pDecoder->backend.vfs.file, pBufferOut, bytesToRead, &bytesRead);
+    }
+    
+    return bytesRead;
 }
 
-static ma_bool32 ma_decoder__on_seek_stdio(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin)
-{
-    return fseek((FILE*)pDecoder->pUserData, byteOffset, (origin == ma_seek_origin_current) ? SEEK_CUR : SEEK_SET) == 0;
-}
-
-static ma_result ma_decoder__preinit_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+static ma_bool32 ma_decoder__on_seek_vfs(ma_decoder* pDecoder, int offset, ma_seek_origin origin)
 {
     ma_result result;
-    FILE* pFile;
 
-    if (pDecoder == NULL) {
-        return MA_INVALID_ARGS;
+    MA_ASSERT(pDecoder != NULL);
+
+    if (pDecoder->backend.vfs.pVFS == NULL) {
+        result = ma_default_vfs_seek(NULL, pDecoder->backend.vfs.file, offset, origin);
+    } else {
+        result = ma_vfs_seek(pDecoder->backend.vfs.pVFS, pDecoder->backend.vfs.file, offset, origin);
+    }
+    
+    if (result != MA_SUCCESS) {
+        return MA_FALSE;
     }
 
-    MA_ZERO_OBJECT(pDecoder);
+    return MA_TRUE;
+}
+
+static ma_result ma_decoder__preinit_vfs(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    ma_result result;
+    ma_vfs_file file;
+
+    result = ma_decoder__preinit(ma_decoder__on_read_vfs, ma_decoder__on_seek_vfs, NULL, pConfig, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
 
     if (pFilePath == NULL || pFilePath[0] == '\0') {
         return MA_INVALID_ARGS;
     }
 
-    result = ma_decoder__init_allocation_callbacks(pConfig, pDecoder);
+    if (pVFS == NULL) {
+        result = ma_default_vfs_open(NULL, pFilePath, MA_OPEN_MODE_READ, &file);
+    } else {
+        result = ma_vfs_open(pVFS, pFilePath, MA_OPEN_MODE_READ, &file);
+    }
+    
     if (result != MA_SUCCESS) {
         return result;
     }
 
-    result = ma_fopen(&pFile, pFilePath, "rb");
-    if (pFile == NULL) {
-        return result;
-    }
-
-    /* We need to manually set the user data so the calls to ma_decoder__on_seek_stdio() succeed. */
-    pDecoder->pUserData = pFile;
+    pDecoder->backend.vfs.pVFS = pVFS;
+    pDecoder->backend.vfs.file = file;
 
     return MA_SUCCESS;
 }
 
-static ma_result ma_decoder__preinit_file_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+MA_API ma_result ma_decoder_init_vfs(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
     ma_result result;
-    FILE* pFile;
+    ma_decoder_config config;
 
-    if (pDecoder == NULL) {
-        return MA_INVALID_ARGS;
-    }
-
-    MA_ZERO_OBJECT(pDecoder);
-
-    if (pFilePath == NULL || pFilePath[0] == '\0') {
-        return MA_INVALID_ARGS;
-    }
-
-    result = ma_decoder__init_allocation_callbacks(pConfig, pDecoder);
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs(pVFS, pFilePath, &config, pDecoder);
     if (result != MA_SUCCESS) {
         return result;
     }
 
-    result = ma_wfopen(&pFile, pFilePath, L"rb", &pDecoder->allocationCallbacks);
-    if (pFile == NULL) {
+    result = MA_NO_BACKEND;
+
+#ifdef MA_HAS_WAV
+    if (result != MA_SUCCESS && ma_path_extension_equal(pFilePath, "wav")) {
+        result = ma_decoder_init_wav__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+#ifdef MA_HAS_FLAC
+    if (result != MA_SUCCESS && ma_path_extension_equal(pFilePath, "flac")) {
+        result = ma_decoder_init_flac__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+#ifdef MA_HAS_MP3
+    if (result != MA_SUCCESS && ma_path_extension_equal(pFilePath, "mp3")) {
+        result = ma_decoder_init_mp3__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+
+    /* If we still haven't got a result just use trial and error. Otherwise we can finish up. */
+    if (result != MA_SUCCESS) {
+        result = ma_decoder_init__internal(ma_decoder__on_read_vfs, ma_decoder__on_seek_vfs, NULL, &config, pDecoder);
+    } else {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
         return result;
     }
 
-    /* We need to manually set the user data so the calls to ma_decoder__on_seek_stdio() succeed. */
-    pDecoder->pUserData = pFile;
+    return MA_SUCCESS;
+}
 
+MA_API ma_result ma_decoder_init_vfs_wav(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_WAV
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_wav__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
     (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_flac(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_FLAC
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_flac__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_mp3(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_MP3
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_mp3__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_vorbis(ma_vfs* pVFS, const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_VORBIS
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+
+
+static ma_result ma_decoder__preinit_vfs_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    ma_result result;
+    ma_vfs_file file;
+
+    result = ma_decoder__preinit(ma_decoder__on_read_vfs, ma_decoder__on_seek_vfs, NULL, pConfig, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    if (pFilePath == NULL || pFilePath[0] == '\0') {
+        return MA_INVALID_ARGS;
+    }
+
+    if (pVFS == NULL) {
+        result = ma_default_vfs_open_w(NULL, pFilePath, MA_OPEN_MODE_READ, &file);
+    } else {
+        result = ma_vfs_open_w(pVFS, pFilePath, MA_OPEN_MODE_READ, &file);
+    }
+    
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    pDecoder->backend.vfs.pVFS = pVFS;
+    pDecoder->backend.vfs.file = file;
+
     return MA_SUCCESS;
 }
+
+MA_API ma_result ma_decoder_init_vfs_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs_w(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = MA_NO_BACKEND;
+
+#ifdef MA_HAS_WAV
+    if (result != MA_SUCCESS && ma_path_extension_equal_w(pFilePath, L"wav")) {
+        result = ma_decoder_init_wav__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+#ifdef MA_HAS_FLAC
+    if (result != MA_SUCCESS && ma_path_extension_equal_w(pFilePath, L"flac")) {
+        result = ma_decoder_init_flac__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+#ifdef MA_HAS_MP3
+    if (result != MA_SUCCESS && ma_path_extension_equal_w(pFilePath, L"mp3")) {
+        result = ma_decoder_init_mp3__internal(&config, pDecoder);
+        if (result != MA_SUCCESS) {
+            ma_decoder__on_seek_vfs(pDecoder, 0, ma_seek_origin_start);
+        }
+    }
+#endif
+
+    /* If we still haven't got a result just use trial and error. Otherwise we can finish up. */
+    if (result != MA_SUCCESS) {
+        result = ma_decoder_init__internal(ma_decoder__on_read_vfs, ma_decoder__on_seek_vfs, NULL, &config, pDecoder);
+    } else {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+        return result;
+    }
+
+    return MA_SUCCESS;
+}
+
+MA_API ma_result ma_decoder_init_vfs_wav_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_WAV
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs_w(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_wav__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_flac_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_FLAC
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs_w(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_flac__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_mp3_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_MP3
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs_w(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_mp3__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+MA_API ma_result ma_decoder_init_vfs_vorbis_w(ma_vfs* pVFS, const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+#ifdef MA_HAS_VORBIS
+    ma_result result;
+    ma_decoder_config config;
+
+    config = ma_decoder_config_init_copy(pConfig);
+    result = ma_decoder__preinit_vfs_w(pVFS, pFilePath, &config, pDecoder);
+    if (result != MA_SUCCESS) {
+        return result;
+    }
+
+    result = ma_decoder_init_vorbis__internal(&config, pDecoder);
+    if (result == MA_SUCCESS) {
+        result = ma_decoder__postinit(&config, pDecoder);
+    }
+
+    if (result != MA_SUCCESS) {
+        ma_vfs_close(pVFS, pDecoder->backend.vfs.file);
+    }
+
+    return result;
+#else
+    (void)pVFS;
+    (void)pFilePath;
+    (void)pConfig;
+    (void)pDecoder;
+    return MA_NO_BACKEND;
+#endif
+}
+
+
 
 MA_API ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file(pFilePath, pConfig, pDecoder);    /* This sets pDecoder->pUserData to a FILE*. */
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    /* WAV */
-    if (ma_path_extension_equal(pFilePath, "wav")) {
-        result =  ma_decoder_init_wav(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* FLAC */
-    if (ma_path_extension_equal(pFilePath, "flac")) {
-        result =  ma_decoder_init_flac(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* MP3 */
-    if (ma_path_extension_equal(pFilePath, "mp3")) {
-        result =  ma_decoder_init_mp3(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* Trial and error. */
-    return ma_decoder_init(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_wav(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_wav(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_wav(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_flac(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_flac(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-}
-
-MA_API ma_result ma_decoder_init_file_vorbis(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
-{
-    ma_result result = ma_decoder__preinit_file(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_vorbis(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_flac(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_mp3(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_mp3(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_mp3(NULL, pFilePath, pConfig, pDecoder);
 }
+
+MA_API ma_result ma_decoder_init_file_vorbis(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    return ma_decoder_init_vfs_vorbis(NULL, pFilePath, pConfig, pDecoder);
+}
+
 
 
 MA_API ma_result ma_decoder_init_file_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file_w(pFilePath, pConfig, pDecoder);    /* This sets pDecoder->pUserData to a FILE*. */
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    /* WAV */
-    if (ma_path_extension_equal_w(pFilePath, L"wav")) {
-        result =  ma_decoder_init_wav(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* FLAC */
-    if (ma_path_extension_equal_w(pFilePath, L"flac")) {
-        result =  ma_decoder_init_flac(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* MP3 */
-    if (ma_path_extension_equal_w(pFilePath, L"mp3")) {
-        result =  ma_decoder_init_mp3(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-        if (result == MA_SUCCESS) {
-            return MA_SUCCESS;
-        }
-
-        ma_decoder__on_seek_stdio(pDecoder, 0, ma_seek_origin_start);
-    }
-
-    /* Trial and error. */
-    return ma_decoder_init(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_w(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_wav_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file_w(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_wav(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_wav_w(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_flac_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file_w(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_flac(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
-}
-
-MA_API ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
-{
-    ma_result result = ma_decoder__preinit_file_w(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
-
-    return ma_decoder_init_vorbis(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+    return ma_decoder_init_vfs_flac_w(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_init_file_mp3_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
 {
-    ma_result result = ma_decoder__preinit_file_w(pFilePath, pConfig, pDecoder);
-    if (result != MA_SUCCESS) {
-        return result;
-    }
+    return ma_decoder_init_vfs_mp3_w(NULL, pFilePath, pConfig, pDecoder);
+}
 
-    return ma_decoder_init_mp3(ma_decoder__on_read_stdio, ma_decoder__on_seek_stdio, pDecoder->pUserData, pConfig, pDecoder);
+MA_API ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder)
+{
+    return ma_decoder_init_vfs_vorbis_w(NULL, pFilePath, pConfig, pDecoder);
 }
 
 MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder)
@@ -41993,9 +43543,12 @@ MA_API ma_result ma_decoder_uninit(ma_decoder* pDecoder)
         pDecoder->onUninit(pDecoder);
     }
 
-    /* If we have a file handle, close it. */
-    if (pDecoder->onRead == ma_decoder__on_read_stdio) {
-        fclose((FILE*)pDecoder->pUserData);
+    if (pDecoder->onRead == ma_decoder__on_read_vfs) {
+        if (pDecoder->backend.vfs.pVFS == NULL) {
+            ma_default_vfs_close(NULL, pDecoder->backend.vfs.file);
+        } else {
+            ma_vfs_close(pDecoder->backend.vfs.pVFS, pDecoder->backend.vfs.file);
+        }
     }
 
     ma_data_converter_uninit(&pDecoder->converter);
@@ -42041,7 +43594,15 @@ MA_API ma_uint64 ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesO
         return pDecoder->onReadPCMFrames(pDecoder, pFramesOut, frameCount);
     }
 
-    /* Getting here means we need to do data conversion. */
+    /*
+    Getting here means we need to do data conversion. If we're seeking forward and are _not_ doing resampling we can run this in a fast path. If we're doing resampling we
+    need to run through each sample because we need to ensure it's internal cache is updated.
+    */
+    if (pFramesOut == NULL && pDecoder->converter.hasResampler == MA_FALSE) {
+        return pDecoder->onReadPCMFrames(pDecoder, NULL, frameCount);   /* All decoder backends must support passing in NULL for the output buffer. */
+    }
+
+    /* Slow path. Need to run everything through the data converter. */
     totalFramesReadOut = 0;
     totalFramesReadIn  = 0;
     pRunningFramesOut  = pFramesOut;
@@ -42082,7 +43643,10 @@ MA_API ma_uint64 ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesO
         }
 
         totalFramesReadOut += framesReadThisIterationOut;
-        pRunningFramesOut   = ma_offset_ptr(pRunningFramesOut, framesReadThisIterationOut * ma_get_bytes_per_frame(pDecoder->outputFormat, pDecoder->outputChannels));
+
+        if (pRunningFramesOut != NULL) {
+            pRunningFramesOut = ma_offset_ptr(pRunningFramesOut, framesReadThisIterationOut * ma_get_bytes_per_frame(pDecoder->outputFormat, pDecoder->outputChannels));
+        }
 
         if (framesReadThisIterationIn == 0 && framesReadThisIterationOut == 0) {
             break;  /* We're done. */
@@ -42095,11 +43659,18 @@ MA_API ma_uint64 ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesO
 MA_API ma_result ma_decoder_seek_to_pcm_frame(ma_decoder* pDecoder, ma_uint64 frameIndex)
 {
     if (pDecoder == NULL) {
-        return 0;
+        return MA_INVALID_ARGS;
     }
 
     if (pDecoder->onSeekToPCMFrame) {
-        return pDecoder->onSeekToPCMFrame(pDecoder, frameIndex);
+        ma_uint64 internalFrameIndex;
+        if (pDecoder->internalSampleRate == pDecoder->outputSampleRate) {
+            internalFrameIndex = frameIndex;
+        } else {
+            internalFrameIndex = ma_calculate_frame_count_after_resampling(pDecoder->internalSampleRate, pDecoder->outputSampleRate, frameIndex);
+        }
+
+        return pDecoder->onSeekToPCMFrame(pDecoder, internalFrameIndex);
     }
 
     /* Should never get here, but if we do it means onSeekToPCMFrame was not set by the backend. */
@@ -42184,11 +43755,11 @@ static ma_result ma_decoder__full_decode_and_uninit(ma_decoder* pDecoder, ma_dec
     return MA_SUCCESS;
 }
 
-MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
+MA_API ma_result ma_decode_from_vfs(ma_vfs* pVFS, const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
 {
+    ma_result result;
     ma_decoder_config config;
     ma_decoder decoder;
-    ma_result result;
 
     if (pFrameCountOut != NULL) {
         *pFrameCountOut = 0;
@@ -42197,18 +43768,21 @@ MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfi
         *ppPCMFramesOut = NULL;
     }
 
-    if (pFilePath == NULL) {
-        return MA_INVALID_ARGS;
-    }
-
     config = ma_decoder_config_init_copy(pConfig);
-    
-    result = ma_decoder_init_file(pFilePath, &config, &decoder);
+
+    result = ma_decoder_init_vfs(pVFS, pFilePath, &config, &decoder);
     if (result != MA_SUCCESS) {
         return result;
     }
 
-    return ma_decoder__full_decode_and_uninit(&decoder, pConfig, pFrameCountOut, ppPCMFramesOut);
+    result = ma_decoder__full_decode_and_uninit(&decoder, pConfig, pFrameCountOut, ppPCMFramesOut);
+
+    return result;
+}
+
+MA_API ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
+{
+    return ma_decode_from_vfs(NULL, pFilePath, pConfig, pFrameCountOut, ppPCMFramesOut);
 }
 
 MA_API ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppPCMFramesOut)
@@ -42523,9 +44097,19 @@ MA_API ma_waveform_config ma_waveform_config_init(ma_format format, ma_uint32 ch
     return config;
 }
 
-static ma_uint64 ma_waveform__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount)
+static ma_result ma_waveform__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
-    return ma_waveform_read_pcm_frames((ma_waveform*)pDataSource, pFramesOut, frameCount);
+    ma_uint64 framesRead = ma_waveform_read_pcm_frames((ma_waveform*)pDataSource, pFramesOut, frameCount);
+
+    if (pFramesRead != NULL) {
+        *pFramesRead = framesRead;
+    }
+
+    if (framesRead < frameCount) {
+        return MA_AT_END;
+    }
+
+    return MA_SUCCESS;
 }
 
 static ma_result ma_waveform__data_source_on_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
@@ -42864,7 +44448,7 @@ MA_API ma_result ma_waveform_seek_to_pcm_frame(ma_waveform* pWaveform, ma_uint64
         return MA_INVALID_ARGS;
     }
 
-    pWaveform->time = pWaveform->advance * frameIndex;
+    pWaveform->time = pWaveform->advance * (ma_int64)frameIndex;    /* Casting for VC6. Won't be an issue in practice. */
 
     return MA_SUCCESS;
 }
@@ -42889,9 +44473,19 @@ MA_API ma_noise_config ma_noise_config_init(ma_format format, ma_uint32 channels
 }
 
 
-static ma_uint64 ma_noise__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount)
+static ma_result ma_noise__data_source_on_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
-    return ma_noise_read_pcm_frames((ma_noise*)pDataSource, pFramesOut, frameCount);
+    ma_uint64 framesRead = ma_noise_read_pcm_frames((ma_noise*)pDataSource, pFramesOut, frameCount);
+    
+    if (pFramesRead != NULL) {
+        *pFramesRead = framesRead;
+    }
+
+    if (framesRead < frameCount) {
+        return MA_AT_END;
+    }
+
+    return MA_SUCCESS;
 }
 
 static ma_result ma_noise__data_source_on_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
@@ -43222,6 +44816,11 @@ MA_API ma_uint64 ma_noise_read_pcm_frames(ma_noise* pNoise, void* pFramesOut, ma
         return 0;
     }
 
+    /* The output buffer is allowed to be NULL. Since we aren't tracking cursors or anything we can just do nothing and pretend to be successful. */
+    if (pFramesOut == NULL) {
+        return frameCount;
+    }
+
     if (pNoise->config.type == ma_noise_type_white) {
         return ma_noise_read_pcm_frames__white(pNoise, pFramesOut, frameCount);
     }
@@ -43384,6 +44983,39 @@ The following miscellaneous changes have also been made.
 /*
 REVISION HISTORY
 ================
+v0.10.8 - 2020-06-22
+  - Remove dependency on ma_context from mutexes.
+  - Change ma_data_source_read_pcm_frames() to return a result code and output the frames read as an output parameter.
+  - Change ma_data_source_seek_pcm_frames() to return a result code and output the frames seeked as an output parameter.
+  - Change ma_audio_buffer_unmap() to return MA_AT_END when the end has been reached. This should be considered successful.
+  - Change playback.pDeviceID and capture.pDeviceID to constant pointers in ma_device_config.
+  - Add support for initializing decoders from a virtual file system object. This is achieved via the ma_vfs API and allows the application to customize file
+    IO for the loading and reading of raw audio data. Passing in NULL for the VFS will use defaults. New APIs:
+      - ma_decoder_init_vfs()
+      - ma_decoder_init_vfs_wav()
+      - ma_decoder_init_vfs_flac()
+      - ma_decoder_init_vfs_mp3()
+      - ma_decoder_init_vfs_vorbis()
+      - ma_decoder_init_vfs_w()
+      - ma_decoder_init_vfs_wav_w()
+      - ma_decoder_init_vfs_flac_w()
+      - ma_decoder_init_vfs_mp3_w()
+      - ma_decoder_init_vfs_vorbis_w()
+  - Add support for memory mapping to ma_data_source.
+    - ma_data_source_map()
+    - ma_data_source_unmap()
+  - Add ma_offset_pcm_frames_ptr() and ma_offset_pcm_frames_const_ptr() which can be used for offsetting a pointer by a specified number of PCM frames.
+  - Add initial implementation of ma_yield() which is useful for spin locks which will be used in some upcoming work.
+  - Add documentation for log levels.
+  - The ma_event API has been made public in preparation for some uncoming work.
+  - Fix a bug in ma_decoder_seek_to_pcm_frame() where the internal sample rate is not being taken into account for determining the seek location.
+  - Fix some bugs with the linear resampler when dynamically changing the sample rate.
+  - Fix compilation errors with MA_NO_DEVICE_IO.
+  - Fix some warnings with GCC and -std=c89.
+  - Fix some formatting warnings with GCC and -Wall and -Wpedantic.
+  - Fix some warnings with VC6.
+  - Minor optimization to ma_copy_pcm_frames(). This is now a no-op when the input and output buffers are the same.
+
 v0.10.7 - 2020-05-25
   - Fix a compilation error in the C++ build.
   - Silence a warning.
