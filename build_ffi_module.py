@@ -1,12 +1,9 @@
 """
 Python interface to the miniaudio library (https://github.com/dr-soft/miniaudio)
 
-This module Use CFFI to create the glue code but also to actually compile the decoders in one go!
-Sound formats supported:
- - ogg vorbis via stb_vorbis
- - mp3 via dr_mp3
- - wav via dr_wav
- - flac via dr_flac
+This module uses CFFI to create the glue code but also to actually compile the decoders in one go!
+
+Sound formats supported: wav, mp3, flac, ogg vorbis
 
 Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
@@ -795,22 +792,11 @@ ffibuilder.set_source("_miniaudio", """
     #include <stdlib.h>
 
     #define DR_FLAC_NO_OGG
-    #include "miniaudio/dr_flac.h"
-    #include "miniaudio/dr_wav.h"
-    #include "miniaudio/dr_mp3.h"
-
-
-    #ifndef NO_STB_VORBIS
     #define STB_VORBIS_HEADER_ONLY
-    /* #define STB_VORBIS_NO_PUSHDATA_API  */   /*  needed by miniaudio decoding logic  */
     #include "miniaudio/stb_vorbis.c"
-    #endif
 
+    #define MINIAUDIO_IMPLEMENTATION
     #include "miniaudio/miniaudio.h"
-
-    /* missing prototype? */
-    ma_uint64 ma_calculate_frame_count_after_resampling(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
-
 
     /* low-level initialization */
     void init_miniaudio(void);
@@ -821,8 +807,7 @@ ffibuilder.set_source("_miniaudio", """
                       libraries=libraries,
                       extra_compile_args=compiler_args,
                       define_macros=[
-                          ("MA_NO_GENERATION", "1"),
-                          ("MA_NO_ENCODING", "1")
+                          ("MA_NO_GENERATION", "1")
                       ]
                     )
 

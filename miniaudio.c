@@ -1,36 +1,14 @@
+/*
+note: miniaudio itself is a single-header-file library,
+and all definitions and code is already included in the
+build_ffi_module bootstrap c module code
+*/
+
+
 #include <stdlib.h>
 #include <stdint.h>
 
-#ifndef NO_STB_VORBIS
-/* #define STB_VORBIS_NO_PUSHDATA_API  */   /*  needed by miniaudio decoding logic  */
-#define STB_VORBIS_HEADER_ONLY
 #include "miniaudio/stb_vorbis.c"
-#endif
-
-
-#define DR_FLAC_IMPLEMENTATION
-#define DR_FLAC_NO_OGG
-#include "miniaudio/dr_flac.h"
-
-#define DR_MP3_IMPLEMENTATION
-#include "miniaudio/dr_mp3.h"
-
-#define DR_WAV_IMPLEMENTATION
-#include "miniaudio/dr_wav.h"
-
-#define MINIAUDIO_IMPLEMENTATION
-/* #define MA_NO_DECODING */
-/* #define MA_NO_AAUDIO */
-/* #define MA_NO_OPENSL */
-/* #define MA_NO_JACK */
-#define MA_NO_WEBAUDIO
-#include "miniaudio/miniaudio.h"
-
-
-#ifndef NO_STB_VORBIS
-#undef STB_VORBIS_HEADER_ONLY		/* this time, do include vorbis implementation */
-#include "miniaudio/stb_vorbis.c"
-#endif
 
 
 #ifdef _WIN32
