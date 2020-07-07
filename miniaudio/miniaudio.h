@@ -1,6 +1,6 @@
 /*
 Audio playback and capture library. Choice of public domain or MIT-0. See license statements at the end of this file.
-miniaudio - v0.10.11 - 28-06-2020
+miniaudio - v0.10.12 - 2020-07-04
 
 David Reid - davidreidsoftware@gmail.com
 
@@ -1372,7 +1372,7 @@ extern "C" {
 
 #define MA_VERSION_MAJOR    0
 #define MA_VERSION_MINOR    10
-#define MA_VERSION_REVISION 11
+#define MA_VERSION_REVISION 12
 #define MA_VERSION_STRING   MA_XSTRINGIFY(MA_VERSION_MAJOR) "." MA_XSTRINGIFY(MA_VERSION_MINOR) "." MA_XSTRINGIFY(MA_VERSION_REVISION)
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -25090,7 +25090,9 @@ static ma_result ma_context_uninit__coreaudio(ma_context* pContext)
     ma_dlclose(pContext, pContext->coreaudio.hCoreFoundation);
 #endif
 
-    ma_context__init_device_tracking__coreaudio(pContext);
+#if !defined(MA_APPLE_MOBILE)
+    ma_context__uninit_device_tracking__coreaudio(pContext);
+#endif
 
     (void)pContext;
     return MA_SUCCESS;
@@ -25276,6 +25278,7 @@ static ma_result ma_context_init__coreaudio(const ma_context_config* pConfig, ma
         }
     }
     
+#if !defined(MA_APPLE_MOBILE)
     result = ma_context__init_device_tracking__coreaudio(pContext);
     if (result != MA_SUCCESS) {
     #if !defined(MA_NO_RUNTIME_LINKING) && !defined(MA_APPLE_MOBILE)
@@ -25285,6 +25288,7 @@ static ma_result ma_context_init__coreaudio(const ma_context_config* pConfig, ma
     #endif
         return result;
     }
+#endif
 
     return MA_SUCCESS;
 }
@@ -61831,11 +61835,14 @@ The following miscellaneous changes have also been made.
 /*
 REVISION HISTORY
 ================
-v0.10.11 - 28-06-2020
+v0.10.12 - 2020-07-04
+  - Fix compilation errors on the iOS build.
+
+v0.10.11 - 2020-06-28
   - Fix some bugs with device tracking on Core Audio.
   - Updates to documentation.
 
-v0.10.10 - 26-06-2020
+v0.10.10 - 2020-06-26
   - Add include guard for the implementation section.
   - Mark ma_device_sink_info_callback() as static.
   - Fix compilation errors with MA_NO_DECODING and MA_NO_ENCODING.
