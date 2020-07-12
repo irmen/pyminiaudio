@@ -785,6 +785,8 @@ if os.name == "posix":
     compiler_args = ["-g1", "-O3", "-ffast-math"]
     if "86" in platform.machine():
         compiler_args.extend([ "-msse", "-mfpmath=sse"])
+    if "arm" in platform.machine():
+        compiler_args.extend([ "-mtune=native", "-march=native" ])
 
 
 ffibuilder.set_source("_miniaudio", """
