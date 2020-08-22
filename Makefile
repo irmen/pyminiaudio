@@ -22,7 +22,8 @@ win_wheels: test
 	py -3.8-64 setup.py clean --all
 	py -3.8-64 setup.py bdist_wheel
 
-linux_wheel: dist
+linux_wheel: test
+	rm -f dist/* *.so
 	python setup.py bdist_wheel
 
 dist: test
