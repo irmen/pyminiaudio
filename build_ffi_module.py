@@ -114,16 +114,16 @@ miniaudio_defs = """
 
 /********************** dr_flac ******************************/
 
-typedef int8_t           drflac_int8;
-typedef uint8_t          drflac_uint8;
-typedef int16_t          drflac_int16;
-typedef uint16_t         drflac_uint16;
-typedef int32_t          drflac_int32;
-typedef uint32_t         drflac_uint32;
-typedef int64_t          drflac_int64;
-typedef uint64_t         drflac_uint64;
-typedef drflac_uint8     drflac_bool8;
-typedef drflac_uint32    drflac_bool32;
+typedef   signed char           drflac_int8;
+typedef unsigned char           drflac_uint8;
+typedef   signed short          drflac_int16;
+typedef unsigned short          drflac_uint16;
+typedef   signed int            drflac_int32;
+typedef unsigned int            drflac_uint32;
+typedef   signed long long      drflac_int64;
+typedef unsigned long long      drflac_uint64;
+typedef drflac_uint8            drflac_bool8;
+typedef drflac_uint32           drflac_bool32;
 
 typedef struct
 {
@@ -160,16 +160,16 @@ void drflac_free(void* p, const drflac_allocation_callbacks* pAllocationCallback
 
 /********************** dr_mp3 **********************************/
 
-    typedef int8_t           drmp3_int8;
-    typedef uint8_t          drmp3_uint8;
-    typedef int16_t          drmp3_int16;
-    typedef uint16_t         drmp3_uint16;
-    typedef int32_t          drmp3_int32;
-    typedef uint32_t         drmp3_uint32;
-    typedef int64_t          drmp3_int64;
-    typedef uint64_t         drmp3_uint64;
-    typedef drmp3_uint8      drmp3_bool8;
-    typedef drmp3_uint32     drmp3_bool32;
+typedef   signed char           drmp3_int8;
+typedef unsigned char           drmp3_uint8;
+typedef   signed short          drmp3_int16;
+typedef unsigned short          drmp3_uint16;
+typedef   signed int            drmp3_int32;
+typedef unsigned int            drmp3_uint32;
+typedef   signed long long  drmp3_int64;
+typedef unsigned long long  drmp3_uint64;
+typedef drmp3_uint8      drmp3_bool8;
+typedef drmp3_uint32     drmp3_bool32;
 
 
 typedef struct
@@ -219,17 +219,16 @@ void drmp3_free(void* p, const drmp3_allocation_callbacks* pAllocationCallbacks)
 #define DR_WAVE_FORMAT_DVI_ADPCM    0x11
 #define DR_WAVE_FORMAT_EXTENSIBLE   0xFFFE
 
-
-    typedef int8_t           drwav_int8;
-    typedef uint8_t          drwav_uint8;
-    typedef int16_t          drwav_int16;
-    typedef uint16_t         drwav_uint16;
-    typedef int32_t          drwav_int32;
-    typedef uint32_t         drwav_uint32;
-    typedef int64_t          drwav_int64;
-    typedef uint64_t         drwav_uint64;
-    typedef drwav_uint8      drwav_bool8;
-    typedef drwav_uint32     drwav_bool32;
+typedef   signed char           drwav_int8;
+typedef unsigned char           drwav_uint8;
+typedef   signed short          drwav_int16;
+typedef unsigned short          drwav_uint16;
+typedef   signed int            drwav_int32;
+typedef unsigned int            drwav_uint32;
+typedef   signed long long  drwav_int64;
+typedef unsigned long long  drwav_uint64;
+typedef drwav_uint8             drwav_bool8;
+typedef drwav_uint32            drwav_bool32;
 
 
 typedef struct
@@ -397,17 +396,17 @@ typedef enum
     ma_backend_null    /* <-- Must always be the last item. Lowest priority, and used as the terminator for backend enumeration. */
 } ma_backend;
 
-    typedef int8_t   ma_int8;
-    typedef uint8_t  ma_uint8;
-    typedef int16_t  ma_int16;
-    typedef uint16_t ma_uint16;
-    typedef int32_t  ma_int32;
-    typedef uint32_t ma_uint32;
-    typedef int64_t  ma_int64;
-    typedef uint64_t ma_uint64;
-    typedef uintptr_t ma_uintptr;
-    typedef ma_uint8                   ma_bool8;
-    typedef ma_uint32                  ma_bool32;
+typedef   signed char           ma_int8;
+typedef unsigned char           ma_uint8;
+typedef   signed short          ma_int16;
+typedef unsigned short          ma_uint16;
+typedef   signed int            ma_int32;
+typedef unsigned int            ma_uint32;
+typedef   signed long long  ma_int64;
+typedef unsigned long long  ma_uint64;
+typedef ma_uint64           ma_uintptr;
+typedef ma_uint8    ma_bool8;
+typedef ma_uint32   ma_bool32;
 
 
 typedef enum

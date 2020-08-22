@@ -27,7 +27,7 @@ linux_wheel: dist
 
 dist: test
 	rm -f dist/* *.so
-	python setup.py clean --all
+	python setup.py clean
 	python setup.py sdist
 
 upload: check_upload
