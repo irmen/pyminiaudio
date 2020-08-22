@@ -1,12 +1,17 @@
 .PHONY:  all win_dist dist upload
 
 all:
-	@echo "Targets:  test, docs, dist, win_wheels, linux_wheel, check_upload, upload"
+	@echo "Targets:  clean, test, docs, dist, win_wheels, linux_wheel, check_upload, upload"
+
+clean:
+	rm -f dist/* *.so
+	python setup.py clean --all
 
 test:
 	rm -f *.so
-	python setup.py build test
-	python -m pytest tests
+	python setup.py build
+	python setup.py test
+	python -m pytest -v tests
 
 docs:
 	@python -c 'import setup; setup.make_md_docs("miniaudio")'
