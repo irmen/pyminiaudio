@@ -12,7 +12,8 @@ py35skip = pytest.mark.skipif(
 
 
 def dummy_generator():
-    yield
+    while True:
+        yield
 
 
 def test_devices():
