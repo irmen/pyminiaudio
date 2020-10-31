@@ -224,69 +224,65 @@ def read_file(filename: str, convert_to_16bit: bool = False) -> DecodedSoundFile
 def vorbis_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (vorbis format)."""
     filenamebytes = _get_filename_bytes(filename)
-    error = ffi.new("int *")
-    vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
-    if not vorbis:
-        raise DecodeError("could not open/decode file")
-    try:
-        info = lib.stb_vorbis_get_info(vorbis)
-        duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
-        num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
-        return SoundFileInfo(filename, FileFormat.VORBIS, info.channels, info.sample_rate,
-                             SampleFormat.SIGNED16, duration, num_frames)
-    finally:
-        lib.stb_vorbis_close(vorbis)
+    with ffi.new("int *") as error:
+        vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
+        if not vorbis:
+            raise DecodeError("could not open/decode file")
+        try:
+            info = lib.stb_vorbis_get_info(vorbis)
+            duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
+            num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
+            return SoundFileInfo(filename, FileFormat.VORBIS, info.channels, info.sample_rate,
+                                 SampleFormat.SIGNED16, duration, num_frames)
+        finally:
+            lib.stb_vorbis_close(vorbis)
 
 
 def vorbis_get_info(data: bytes) -> SoundFileInfo:
     """Fetch some information about the audio data (vorbis format)."""
-    error = ffi.new("int *")
-    vorbis = lib.stb_vorbis_open_memory(data, len(data), error, ffi.NULL)
-    if not vorbis:
-        raise DecodeError("could not open/decode data")
-    try:
-        info = lib.stb_vorbis_get_info(vorbis)
-        duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
-        num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
-        return SoundFileInfo("<memory>", FileFormat.VORBIS, info.channels, info.sample_rate,
-                             SampleFormat.SIGNED16, duration, num_frames)
-    finally:
-        lib.stb_vorbis_close(vorbis)
+    with ffi.new("int *") as error:
+        vorbis = lib.stb_vorbis_open_memory(data, len(data), error, ffi.NULL)
+        if not vorbis:
+            raise DecodeError("could not open/decode data")
+        try:
+            info = lib.stb_vorbis_get_info(vorbis)
+            duration = lib.stb_vorbis_stream_length_in_seconds(vorbis)
+            num_frames = lib.stb_vorbis_stream_length_in_samples(vorbis)
+            return SoundFileInfo("<memory>", FileFormat.VORBIS, info.channels, info.sample_rate,
+                                 SampleFormat.SIGNED16, duration, num_frames)
+        finally:
+            lib.stb_vorbis_close(vorbis)
 
 
 def vorbis_read_file(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole vorbis audio file. Resulting sample format is 16 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("int *")
-    sample_rate = ffi.new("int *")
-    output = ffi.new("short **")
-    num_frames = lib.stb_vorbis_decode_filename(filenamebytes, channels, sample_rate, output)
-    if num_frames <= 0:
-        raise DecodeError("cannot load/decode file")
-    try:
-        buffer = ffi.buffer(output[0], num_frames * channels[0] * 2)
-        samples = _create_int_array(2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.free(output[0])
+    with ffi.new("int *") as channels, ffi.new("int *") as sample_rate, ffi.new("short **") as output:
+        num_frames = lib.stb_vorbis_decode_filename(filenamebytes, channels, sample_rate, output)
+        if num_frames <= 0:
+            raise DecodeError("cannot load/decode file")
+        try:
+            buffer = ffi.buffer(output[0], num_frames * channels[0] * 2)
+            samples = _create_int_array(2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.free(output[0])
 
 
 def vorbis_read(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole vorbis audio data. Resulting sample format is 16 bits signed integer."""
-    channels = ffi.new("int *")
-    sample_rate = ffi.new("int *")
-    output = ffi.new("short **")
-    num_samples = lib.stb_vorbis_decode_memory(data, len(data), channels, sample_rate, output)
-    if num_samples <= 0:
-        raise DecodeError("cannot load/decode data")
-    try:
-        buffer = ffi.buffer(output[0], num_samples * channels[0] * 2)
-        samples = _create_int_array(2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.free(output[0])
+    with ffi.new("int *") as channels, ffi.new("int *") as sample_rate, ffi.new("short **") as output:
+        num_samples = lib.stb_vorbis_decode_memory(data, len(data), channels, sample_rate, output)
+        if num_samples <= 0:
+            raise DecodeError("cannot load/decode data")
+        try:
+            buffer = ffi.buffer(output[0], num_samples * channels[0] * 2)
+            samples = _create_int_array(2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.free(output[0])
 
 
 def vorbis_stream_file(filename: str, seek_frame: int = 0) -> Generator[array.array, None, None]:
@@ -294,37 +290,37 @@ def vorbis_stream_file(filename: str, seek_frame: int = 0) -> Generator[array.ar
     This uses a variable unconfigurable chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    error = ffi.new("int *")
-    vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
-    if not vorbis:
-        raise DecodeError("could not open/decode file")
-    try:
-        info = lib.stb_vorbis_get_info(vorbis)
-        decode_buffer1 = ffi.new("short[]", 4096 * info.channels)
-        decodebuf_ptr1 = ffi.cast("short *", decode_buffer1)
-        decode_buffer2 = ffi.new("short[]", 4096 * info.channels)
-        decodebuf_ptr2 = ffi.cast("short *", decode_buffer2)
-        if seek_frame > 0:
-            result = lib.stb_vorbis_seek_frame(vorbis, seek_frame)
-            if result <= 0:
-                raise DecodeError("can't seek")
-        # note: we decode several frames to reduce the overhead of very small sample sizes a little
-        while True:
-            num_samples1 = lib.stb_vorbis_get_frame_short_interleaved(vorbis, info.channels, decodebuf_ptr1,
-                                                                      4096 * info.channels)
-            num_samples2 = lib.stb_vorbis_get_frame_short_interleaved(vorbis, info.channels, decodebuf_ptr2,
-                                                                      4096 * info.channels)
-            if num_samples1 + num_samples2 <= 0:
-                break
-            buffer = ffi.buffer(decode_buffer1, num_samples1 * 2 * info.channels)
-            samples = _create_int_array(2)
-            samples.frombytes(buffer)
-            if num_samples2 > 0:
-                buffer = ffi.buffer(decode_buffer2, num_samples2 * 2 * info.channels)
-                samples.frombytes(buffer)
-            yield samples
-    finally:
-        lib.stb_vorbis_close(vorbis)
+    with ffi.new("int *") as error:
+        vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
+        if not vorbis:
+            raise DecodeError("could not open/decode file")
+        try:
+            info = lib.stb_vorbis_get_info(vorbis)
+            with ffi.new("short[]", 4096 * info.channels) as decode_buffer1, \
+                ffi.new("short[]", 4096 * info.channels) as decode_buffer2:
+                decodebuf_ptr1 = ffi.cast("short *", decode_buffer1)
+                decodebuf_ptr2 = ffi.cast("short *", decode_buffer2)
+                if seek_frame > 0:
+                    result = lib.stb_vorbis_seek_frame(vorbis, seek_frame)
+                    if result <= 0:
+                        raise DecodeError("can't seek")
+                # note: we decode several frames to reduce the overhead of very small sample sizes a little
+                while True:
+                    num_samples1 = lib.stb_vorbis_get_frame_short_interleaved(vorbis, info.channels, decodebuf_ptr1,
+                                                                              4096 * info.channels)
+                    num_samples2 = lib.stb_vorbis_get_frame_short_interleaved(vorbis, info.channels, decodebuf_ptr2,
+                                                                              4096 * info.channels)
+                    if num_samples1 + num_samples2 <= 0:
+                        break
+                    buffer = ffi.buffer(decode_buffer1, num_samples1 * 2 * info.channels)
+                    samples = _create_int_array(2)
+                    samples.frombytes(buffer)
+                    if num_samples2 > 0:
+                        buffer = ffi.buffer(decode_buffer2, num_samples2 * 2 * info.channels)
+                        samples.frombytes(buffer)
+                    yield samples
+        finally:
+            lib.stb_vorbis_close(vorbis)
 
 
 def flac_get_file_info(filename: str) -> SoundFileInfo:
@@ -359,109 +355,109 @@ def flac_get_info(data: bytes) -> SoundFileInfo:
 def flac_read_file_s32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio file. Resulting sample format is 32 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_file_and_read_pcm_frames_s32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = _create_int_array(4)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_file_and_read_pcm_frames_s32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = _create_int_array(4)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_read_file_s16(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio file. Resulting sample format is 16 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_file_and_read_pcm_frames_s16(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_file_and_read_pcm_frames_s16(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_read_file_f32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio file. Resulting sample format is 32 bits float."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_file_and_read_pcm_frames_f32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_file_and_read_pcm_frames_f32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_read_s32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio data. Resulting sample format is 32 bits signed integer."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_s32(data, len(data),
-                                                            channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = _create_int_array(4)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_memory_and_read_pcm_frames_s32(data, len(data),
+                                                                channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = _create_int_array(4)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_read_s16(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio data. Resulting sample format is 16 bits signed integer."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_s16(data, len(data),
-                                                            channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_memory_and_read_pcm_frames_s16(data, len(data),
+                                                                channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_read_f32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole flac audio file. Resulting sample format is 32 bits float."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drflac_uint64 *")
-    memory = lib.drflac_open_memory_and_read_pcm_frames_f32(data, len(data),
-                                                            channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drflac_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drflac_uint64 *") as num_frames:
+        memory = lib.drflac_open_memory_and_read_pcm_frames_f32(data, len(data),
+                                                                channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drflac_free(memory, ffi.NULL)
 
 
 def flac_stream_file(filename: str, frames_to_read: int = 1024,
@@ -478,16 +474,16 @@ def flac_stream_file(filename: str, frames_to_read: int = 1024,
         if result <= 0:
             raise DecodeError("can't seek")
     try:
-        decodebuffer = ffi.new("drflac_int16[]", frames_to_read * flac.channels)
-        buf_ptr = ffi.cast("drflac_int16 *", decodebuffer)
-        while True:
-            num_samples = lib.drflac_read_pcm_frames_s16(flac, frames_to_read, buf_ptr)
-            if num_samples <= 0:
-                break
-            buffer = ffi.buffer(decodebuffer, num_samples * 2 * flac.channels)
-            samples = _create_int_array(2)
-            samples.frombytes(buffer)
-            yield samples
+        with ffi.new("drflac_int16[]", frames_to_read * flac.channels) as decodebuffer:
+            buf_ptr = ffi.cast("drflac_int16 *", decodebuffer)
+            while True:
+                num_samples = lib.drflac_read_pcm_frames_s16(flac, frames_to_read, buf_ptr)
+                if num_samples <= 0:
+                    break
+                buffer = ffi.buffer(decodebuffer, num_samples * 2 * flac.channels)
+                samples = _create_int_array(2)
+                samples.frombytes(buffer)
+                yield samples
     finally:
         lib.drflac_close(flac)
 
@@ -495,96 +491,92 @@ def flac_stream_file(filename: str, frames_to_read: int = 1024,
 def mp3_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (mp3 format)."""
     filenamebytes = _get_filename_bytes(filename)
-    mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
-        raise DecodeError("could not open/decode file")
-    try:
-        num_frames = lib.drmp3_get_pcm_frame_count(mp3)
-        duration = num_frames / mp3.sampleRate
-        return SoundFileInfo(filename, FileFormat.MP3, mp3.channels, mp3.sampleRate,
-                             SampleFormat.SIGNED16, duration, num_frames)
-    finally:
-        lib.drmp3_uninit(mp3)
+    with ffi.new("drmp3 *") as mp3:
+        if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
+            raise DecodeError("could not open/decode file")
+        try:
+            num_frames = lib.drmp3_get_pcm_frame_count(mp3)
+            duration = num_frames / mp3.sampleRate
+            return SoundFileInfo(filename, FileFormat.MP3, mp3.channels, mp3.sampleRate,
+                                 SampleFormat.SIGNED16, duration, num_frames)
+        finally:
+            lib.drmp3_uninit(mp3)
 
 
 def mp3_get_info(data: bytes) -> SoundFileInfo:
     """Fetch some information about the audio data (mp3 format)."""
-    mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_memory(mp3, data, len(data), ffi.NULL):
-        raise DecodeError("could not open/decode data")
-    try:
-        num_frames = lib.drmp3_get_pcm_frame_count(mp3)
-        duration = num_frames / mp3.sampleRate
-        return SoundFileInfo("<memory>", FileFormat.MP3, mp3.channels, mp3.sampleRate,
-                             SampleFormat.SIGNED16, duration, num_frames)
-    finally:
-        lib.drmp3_uninit(mp3)
+    with ffi.new("drmp3 *") as mp3:
+        if not lib.drmp3_init_memory(mp3, data, len(data), ffi.NULL):
+            raise DecodeError("could not open/decode data")
+        try:
+            num_frames = lib.drmp3_get_pcm_frame_count(mp3)
+            duration = num_frames / mp3.sampleRate
+            return SoundFileInfo("<memory>", FileFormat.MP3, mp3.channels, mp3.sampleRate,
+                                 SampleFormat.SIGNED16, duration, num_frames)
+        finally:
+            lib.drmp3_uninit(mp3)
 
 
 def mp3_read_file_f32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio file. Resulting sample format is 32 bits float."""
     filenamebytes = _get_filename_bytes(filename)
-    config = ffi.new("drmp3_config *")
-    num_frames = ffi.new("drmp3_uint64 *")
-    memory = lib.drmp3_open_file_and_read_pcm_frames_f32(filenamebytes, config, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drmp3_free(memory, ffi.NULL)
+    with ffi.new("drmp3_config *") as config, ffi.new("drmp3_uint64 *") as num_frames:
+        memory = lib.drmp3_open_file_and_read_pcm_frames_f32(filenamebytes, config, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drmp3_free(memory, ffi.NULL)
 
 
 def mp3_read_file_s16(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio file. Resulting sample format is 16 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    config = ffi.new("drmp3_config *")
-    num_frames = ffi.new("drmp3_uint64 *")
-    memory = lib.drmp3_open_file_and_read_pcm_frames_s16(filenamebytes, config, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drmp3_free(memory, ffi.NULL)
+    with ffi.new("drmp3_config *") as config, ffi.new("drmp3_uint64 *") as num_frames:
+        memory = lib.drmp3_open_file_and_read_pcm_frames_s16(filenamebytes, config, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drmp3_free(memory, ffi.NULL)
 
 
 def mp3_read_f32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio data. Resulting sample format is 32 bits float."""
-    config = ffi.new("drmp3_config *")
-    num_frames = ffi.new("drmp3_uint64 *")
-    memory = lib.drmp3_open_memory_and_read_pcm_frames_f32(data, len(data), config, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drmp3_free(memory, ffi.NULL)
+    with ffi.new("drmp3_config *") as config, ffi.new("drmp3_uint64 *") as num_frames:
+        memory = lib.drmp3_open_memory_and_read_pcm_frames_f32(data, len(data), config, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drmp3_free(memory, ffi.NULL)
 
 
 def mp3_read_s16(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio data. Resulting sample format is 16 bits signed integer."""
-    config = ffi.new("drmp3_config *")
-    num_frames = ffi.new("drmp3_uint64 *")
-    memory = lib.drmp3_open_memory_and_read_pcm_frames_s16(data, len(data), config, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drmp3_free(memory, ffi.NULL)
+    with ffi.new("drmp3_config *") as config, ffi.new("drmp3_uint64 *") as num_frames:
+        memory = lib.drmp3_open_memory_and_read_pcm_frames_s16(data, len(data), config, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drmp3_free(memory, ffi.NULL)
 
 
 def mp3_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int = 0) -> Generator[array.array, None, None]:
@@ -592,162 +584,162 @@ def mp3_stream_file(filename: str, frames_to_read: int = 1024, seek_frame: int =
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    mp3 = ffi.new("drmp3 *")
-    if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
-        raise DecodeError("could not open/decode file")
-    if seek_frame > 0:
-        result = lib.drmp3_seek_to_pcm_frame(mp3, seek_frame)
-        if result <= 0:
-            raise DecodeError("can't seek")
-    try:
-        decodebuffer = ffi.new("drmp3_int16[]", frames_to_read * mp3.channels)
-        buf_ptr = ffi.cast("drmp3_int16 *", decodebuffer)
-        while True:
-            num_samples = lib.drmp3_read_pcm_frames_s16(mp3, frames_to_read, buf_ptr)
-            if num_samples <= 0:
-                break
-            buffer = ffi.buffer(decodebuffer, num_samples * 2 * mp3.channels)
-            samples = _create_int_array(2)
-            samples.frombytes(buffer)
-            yield samples
-    finally:
-        lib.drmp3_uninit(mp3)
+    with ffi.new("drmp3 *") as mp3:
+        if not lib.drmp3_init_file(mp3, filenamebytes, ffi.NULL):
+            raise DecodeError("could not open/decode file")
+        if seek_frame > 0:
+            result = lib.drmp3_seek_to_pcm_frame(mp3, seek_frame)
+            if result <= 0:
+                raise DecodeError("can't seek")
+        try:
+            with ffi.new("drmp3_int16[]", frames_to_read * mp3.channels) as decodebuffer:
+                buf_ptr = ffi.cast("drmp3_int16 *", decodebuffer)
+                while True:
+                    num_samples = lib.drmp3_read_pcm_frames_s16(mp3, frames_to_read, buf_ptr)
+                    if num_samples <= 0:
+                        break
+                    buffer = ffi.buffer(decodebuffer, num_samples * 2 * mp3.channels)
+                    samples = _create_int_array(2)
+                    samples.frombytes(buffer)
+                    yield samples
+        finally:
+            lib.drmp3_uninit(mp3)
 
 
 def wav_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (wav format)."""
     filenamebytes = _get_filename_bytes(filename)
-    wav = ffi.new("drwav*")
-    if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
-        raise DecodeError("could not open/decode file")
-    try:
-        duration = wav.totalPCMFrameCount / wav.sampleRate
-        sample_width = wav.bitsPerSample // 8
-        is_float = wav.translatedFormatTag == lib.DR_WAVE_FORMAT_IEEE_FLOAT
-        return SoundFileInfo(filename, FileFormat.WAV, wav.channels, wav.sampleRate,
-                             _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
-    finally:
-        lib.drwav_uninit(wav)
+    with ffi.new("drwav*") as wav:
+        if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
+            raise DecodeError("could not open/decode file")
+        try:
+            duration = wav.totalPCMFrameCount / wav.sampleRate
+            sample_width = wav.bitsPerSample // 8
+            is_float = wav.translatedFormatTag == lib.DR_WAVE_FORMAT_IEEE_FLOAT
+            return SoundFileInfo(filename, FileFormat.WAV, wav.channels, wav.sampleRate,
+                                 _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
+        finally:
+            lib.drwav_uninit(wav)
 
 
 def wav_get_info(data: bytes) -> SoundFileInfo:
     """Fetch some information about the audio data (wav format)."""
-    wav = ffi.new("drwav*")
-    if not lib.drwav_init_memory(wav, data, len(data), ffi.NULL):
-        raise DecodeError("could not open/decode data")
-    try:
-        duration = wav.totalPCMFrameCount / wav.sampleRate
-        sample_width = wav.bitsPerSample // 8
-        is_float = wav.translatedFormatTag == lib.DR_WAVE_FORMAT_IEEE_FLOAT
-        return SoundFileInfo("<memory>", FileFormat.WAV, wav.channels, wav.sampleRate,
-                             _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
-    finally:
-        lib.drwav_uninit(wav)
+    with ffi.new("drwav*") as wav:
+        if not lib.drwav_init_memory(wav, data, len(data), ffi.NULL):
+            raise DecodeError("could not open/decode data")
+        try:
+            duration = wav.totalPCMFrameCount / wav.sampleRate
+            sample_width = wav.bitsPerSample // 8
+            is_float = wav.translatedFormatTag == lib.DR_WAVE_FORMAT_IEEE_FLOAT
+            return SoundFileInfo("<memory>", FileFormat.WAV, wav.channels, wav.sampleRate,
+                                 _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
+        finally:
+            lib.drwav_uninit(wav)
 
 
 def wav_read_file_s32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio file. Resulting sample format is 32 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_file_and_read_pcm_frames_s32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = _create_int_array(4)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_file_and_read_pcm_frames_s32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = _create_int_array(4)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_read_file_s16(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio file. Resulting sample format is 16 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_file_and_read_pcm_frames_s16(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_file_and_read_pcm_frames_s16(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_read_file_f32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio file. Resulting sample format is 32 bits float."""
     filenamebytes = _get_filename_bytes(filename)
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_file_and_read_pcm_frames_f32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode file")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_file_and_read_pcm_frames_f32(filenamebytes, channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode file")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile(filename, channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_read_s32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio data. Resulting sample format is 32 bits signed integer."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_memory_and_read_pcm_frames_s32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = _create_int_array(4)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_memory_and_read_pcm_frames_s32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = _create_int_array(4)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED32, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_read_s16(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio data. Resulting sample format is 16 bits signed integer."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_memory_and_read_pcm_frames_s16(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_memory_and_read_pcm_frames_s16(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = _create_int_array(2)
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 2)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.SIGNED16, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_read_f32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole wav audio data. Resulting sample format is 32 bits float."""
-    channels = ffi.new("unsigned int *")
-    sample_rate = ffi.new("unsigned int *")
-    num_frames = ffi.new("drwav_uint64 *")
-    memory = lib.drwav_open_memory_and_read_pcm_frames_f32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
-    if not memory:
-        raise DecodeError("cannot load/decode data")
-    try:
-        samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
-        samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
-    finally:
-        lib.drwav_free(memory, ffi.NULL)
+    with ffi.new("unsigned int *") as channels, \
+        ffi.new("unsigned int *") as sample_rate, \
+        ffi.new("drwav_uint64 *") as num_frames:
+        memory = lib.drwav_open_memory_and_read_pcm_frames_f32(data, len(data), channels, sample_rate, num_frames, ffi.NULL)
+        if not memory:
+            raise DecodeError("cannot load/decode data")
+        try:
+            samples = array.array('f')
+            buffer = ffi.buffer(memory, num_frames[0] * channels[0] * 4)
+            samples.frombytes(buffer)
+            return DecodedSoundFile("<memory>", channels[0], sample_rate[0], SampleFormat.FLOAT32, samples)
+        finally:
+            lib.drwav_free(memory, ffi.NULL)
 
 
 def wav_stream_file(filename: str, frames_to_read: int = 1024,
@@ -756,46 +748,45 @@ def wav_stream_file(filename: str, frames_to_read: int = 1024,
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
     filenamebytes = _get_filename_bytes(filename)
-    wav = ffi.new("drwav*")
-    if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
-        raise DecodeError("could not open/decode file")
-    if seek_frame > 0:
-        result = lib.drwav_seek_to_pcm_frame(wav, seek_frame)
-        if result <= 0:
-            raise DecodeError("can't seek")
-    try:
-        decodebuffer = ffi.new("drwav_int16[]", frames_to_read * wav.channels)
-        buf_ptr = ffi.cast("drwav_int16 *", decodebuffer)
-        while True:
-            num_samples = lib.drwav_read_pcm_frames_s16(wav, frames_to_read, buf_ptr)
-            if num_samples <= 0:
-                break
-            buffer = ffi.buffer(decodebuffer, num_samples * 2 * wav.channels)
-            samples = _create_int_array(2)
-            samples.frombytes(buffer)
-            yield samples
-    finally:
-        lib.drwav_uninit(wav)
+    with ffi.new("drwav*") as wav:
+        if not lib.drwav_init_file(wav, filenamebytes, ffi.NULL):
+            raise DecodeError("could not open/decode file")
+        if seek_frame > 0:
+            result = lib.drwav_seek_to_pcm_frame(wav, seek_frame)
+            if result <= 0:
+                raise DecodeError("can't seek")
+        try:
+            with ffi.new("drwav_int16[]", frames_to_read * wav.channels) as decodebuffer:
+                buf_ptr = ffi.cast("drwav_int16 *", decodebuffer)
+                while True:
+                    num_samples = lib.drwav_read_pcm_frames_s16(wav, frames_to_read, buf_ptr)
+                    if num_samples <= 0:
+                        break
+                    buffer = ffi.buffer(decodebuffer, num_samples * 2 * wav.channels)
+                    samples = _create_int_array(2)
+                    samples.frombytes(buffer)
+                    yield samples
+        finally:
+            lib.drwav_uninit(wav)
 
 
 def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     """Writes the pcm sound to a WAV file"""
-    fmt = ffi.new("drwav_data_format*")
-    fmt.container = lib.drwav_container_riff
-    fmt.format = lib.DR_WAVE_FORMAT_PCM
-    fmt.channels = sound.nchannels
-    fmt.sampleRate = sound.sample_rate
-    fmt.bitsPerSample = sound.sample_width * 8
-    # what about floating point format?
-    filename_bytes = filename.encode(sys.getfilesystemencoding())
-    pwav = ffi.new("drwav*")
-    if not lib.drwav_init_file_write_sequential(pwav, filename_bytes,
-                                                fmt, sound.num_frames * sound.nchannels, ffi.NULL):
-        raise IOError("can't open file for writing")
-    try:
-        lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
-    finally:
-        lib.drwav_uninit(pwav)
+    with ffi.new("drwav_data_format*") as fmt, ffi.new("drwav*") as pwav:
+        fmt.container = lib.drwav_container_riff
+        fmt.format = lib.DR_WAVE_FORMAT_PCM
+        fmt.channels = sound.nchannels
+        fmt.sampleRate = sound.sample_rate
+        fmt.bitsPerSample = sound.sample_width * 8
+        # what about floating point format?
+        filename_bytes = filename.encode(sys.getfilesystemencoding())
+        if not lib.drwav_init_file_write_sequential(pwav, filename_bytes,
+                                                    fmt, sound.num_frames * sound.nchannels, ffi.NULL):
+            raise IOError("can't open file for writing")
+        try:
+            lib.drwav_write_pcm_frames(pwav, sound.num_frames, sound.samples.tobytes())
+        finally:
+            lib.drwav_uninit(pwav)
 
 
 def _create_int_array(itemsize: int) -> array.array:
@@ -832,43 +823,41 @@ class Devices:
 
     def get_playbacks(self) -> List[Dict[str, Any]]:
         """Get a list of playback devices and some details about them"""
-        playback_infos = ffi.new("ma_device_info**")
-        playback_count = ffi.new("ma_uint32*")
-        result = lib.ma_context_get_devices(self._context, playback_infos, playback_count, ffi.NULL,  ffi.NULL)
-        if result != lib.MA_SUCCESS:
-            raise MiniaudioError("cannot get device infos", result)
-        devs = []
-        for i in range(playback_count[0]):
-            ma_device_info = playback_infos[0][i]
-            dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
-            info = {
-                "name": ffi.string(ma_device_info.name).decode(),
-                "type": DeviceType.PLAYBACK,
-                "id": dev_id
-            }
-            info.update(self._get_info(DeviceType.PLAYBACK, ma_device_info))
-            devs.append(info)
-        return devs
+        with ffi.new("ma_device_info**") as playback_infos, ffi.new("ma_uint32*") as playback_count:
+            result = lib.ma_context_get_devices(self._context, playback_infos, playback_count, ffi.NULL,  ffi.NULL)
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("cannot get device infos", result)
+            devs = []
+            for i in range(playback_count[0]):
+                ma_device_info = playback_infos[0][i]
+                dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
+                info = {
+                    "name": ffi.string(ma_device_info.name).decode(),
+                    "type": DeviceType.PLAYBACK,
+                    "id": dev_id
+                }
+                info.update(self._get_info(DeviceType.PLAYBACK, ma_device_info))
+                devs.append(info)
+            return devs
 
     def get_captures(self) -> List[Dict[str, Any]]:
         """Get a list of capture devices and some details about them"""
-        capture_infos = ffi.new("ma_device_info**")
-        capture_count = ffi.new("ma_uint32*")
-        result = lib.ma_context_get_devices(self._context, ffi.NULL,  ffi.NULL, capture_infos, capture_count)
-        if result != lib.MA_SUCCESS:
-            raise MiniaudioError("cannot get device infos", result)
-        devs = []
-        for i in range(capture_count[0]):
-            ma_device_info = capture_infos[0][i]
-            dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
-            info = {
-                "name": ffi.string(ma_device_info.name).decode(),
-                "type": DeviceType.CAPTURE,
-                "id": dev_id
-            }
-            info.update(self._get_info(DeviceType.CAPTURE, ma_device_info))
-            devs.append(info)
-        return devs
+        with ffi.new("ma_device_info**") as capture_infos, ffi.new("ma_uint32*") as capture_count:
+            result = lib.ma_context_get_devices(self._context, ffi.NULL,  ffi.NULL, capture_infos, capture_count)
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("cannot get device infos", result)
+            devs = []
+            for i in range(capture_count[0]):
+                ma_device_info = capture_infos[0][i]
+                dev_id = ffi.new("ma_device_id *", ma_device_info.id)  # copy the id memory
+                info = {
+                    "name": ffi.string(ma_device_info.name).decode(),
+                    "type": DeviceType.CAPTURE,
+                    "id": dev_id
+                }
+                info.update(self._get_info(DeviceType.CAPTURE, ma_device_info))
+                devs.append(info)
+            return devs
 
     def _get_info(self, device_type: DeviceType, device_info: ffi.CData) -> Dict[str, Any]:
         # obtain detailed info about the device
@@ -934,16 +923,15 @@ def decode_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED
     sample_width = _width_from_format(output_format)
     samples = _array_proto_from_format(output_format)
     filenamebytes = _get_filename_bytes(filename)
-    frames = ffi.new("ma_uint64 *")
-    data = ffi.new("void **")
-    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
-    decoder_config.ditherMode = dither.value
-    result = lib.ma_decode_file(filenamebytes, ffi.addressof(decoder_config), frames, data)
-    if result != lib.MA_SUCCESS:
-        raise DecodeError("failed to decode file", result)
-    buffer = ffi.buffer(data[0], frames[0] * nchannels * sample_width)
-    samples.frombytes(buffer)
-    return DecodedSoundFile(filename, nchannels, sample_rate, output_format, samples)
+    with ffi.new("ma_uint64 *") as frames, ffi.new("void **") as memory:
+        decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
+        decoder_config.ditherMode = dither.value
+        result = lib.ma_decode_file(filenamebytes, ffi.addressof(decoder_config), frames, memory)
+        if result != lib.MA_SUCCESS:
+            raise DecodeError("failed to decode file", result)
+        buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
+        samples.frombytes(buffer)
+        return DecodedSoundFile(filename, nchannels, sample_rate, output_format, samples)
 
 
 def decode(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16,
@@ -951,16 +939,15 @@ def decode(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16,
     """Convenience function to decode any supported audio file in memory to raw PCM samples in your chosen format."""
     sample_width = _width_from_format(output_format)
     samples = _array_proto_from_format(output_format)
-    frames = ffi.new("ma_uint64 *")
-    memory = ffi.new("void **")
-    decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
-    decoder_config.ditherMode = dither.value
-    result = lib.ma_decode_memory(data, len(data), ffi.addressof(decoder_config), frames, memory)
-    if result != lib.MA_SUCCESS:
-        raise DecodeError("failed to decode data", result)
-    buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
-    samples.frombytes(buffer)
-    return DecodedSoundFile("<memory>", nchannels, sample_rate, output_format, samples)
+    with ffi.new("ma_uint64 *") as frames, ffi.new("void **") as memory:
+        decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
+        decoder_config.ditherMode = dither.value
+        result = lib.ma_decode_memory(data, len(data), ffi.addressof(decoder_config), frames, memory)
+        if result != lib.MA_SUCCESS:
+            raise DecodeError("failed to decode data", result)
+        buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
+        samples.frombytes(buffer)
+        return DecodedSoundFile("<memory>", nchannels, sample_rate, output_format, samples)
 
 
 def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format: SampleFormat,
@@ -971,20 +958,20 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
     samples_proto = _array_proto_from_format(output_format)
     allocated_buffer_frames = max(frames_to_read, 16384)
     try:
-        decodebuffer = ffi.new("int8_t[]", allocated_buffer_frames * nchannels * sample_width)
-        buf_ptr = ffi.cast("void *", decodebuffer)
-        want_frames = (yield samples_proto) or frames_to_read
-        while True:
-            if want_frames > allocated_buffer_frames:
-                raise MiniaudioError("wanted to read more frames than storage was allocated for ({} vs {})"
-                                     .format(want_frames, allocated_buffer_frames))
-            num_frames = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames)
-            if num_frames <= 0:
-                break
-            buffer = ffi.buffer(decodebuffer, num_frames * sample_width * nchannels)
-            samples = array.array(samples_proto.typecode)
-            samples.frombytes(buffer)
-            want_frames = (yield samples) or frames_to_read
+        with ffi.new("int8_t[]", allocated_buffer_frames * nchannels * sample_width) as decodebuffer:
+            buf_ptr = ffi.cast("void *", decodebuffer)
+            want_frames = (yield samples_proto) or frames_to_read
+            while True:
+                if want_frames > allocated_buffer_frames:
+                    raise MiniaudioError("wanted to read more frames than storage was allocated for ({} vs {})"
+                                         .format(want_frames, allocated_buffer_frames))
+                num_frames = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames)
+                if num_frames <= 0:
+                    break
+                buffer = ffi.buffer(decodebuffer, num_frames * sample_width * nchannels)
+                samples = array.array(samples_proto.typecode)
+                samples.frombytes(buffer)
+                want_frames = (yield samples) or frames_to_read
     finally:
         if on_close:
             on_close()
