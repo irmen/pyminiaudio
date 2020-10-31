@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.36"
+__version__ = "1.37"
 
 
 import abc
@@ -521,80 +521,68 @@ def mp3_get_info(data: bytes) -> SoundFileInfo:
         lib.drmp3_uninit(mp3)
 
 
-def mp3_read_file_f32(filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> DecodedSoundFile:
+def mp3_read_file_f32(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio file. Resulting sample format is 32 bits float."""
     filenamebytes = _get_filename_bytes(filename)
     config = ffi.new("drmp3_config *")
-    config.outputChannels = want_nchannels
-    config.outputSampleRate = want_sample_rate
     num_frames = ffi.new("drmp3_uint64 *")
     memory = lib.drmp3_open_file_and_read_pcm_frames_f32(filenamebytes, config, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode file")
     try:
         samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
+        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate,
-                                SampleFormat.FLOAT32, samples)
+        return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory, ffi.NULL)
 
 
-def mp3_read_file_s16(filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> DecodedSoundFile:
+def mp3_read_file_s16(filename: str) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio file. Resulting sample format is 16 bits signed integer."""
     filenamebytes = _get_filename_bytes(filename)
     config = ffi.new("drmp3_config *")
-    config.outputChannels = want_nchannels
-    config.outputSampleRate = want_sample_rate
     num_frames = ffi.new("drmp3_uint64 *")
     memory = lib.drmp3_open_file_and_read_pcm_frames_s16(filenamebytes, config, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode file")
     try:
         samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
+        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile(filename, config.outputChannels, config.outputSampleRate,
-                                SampleFormat.SIGNED16, samples)
+        return DecodedSoundFile(filename, config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory, ffi.NULL)
 
 
-def mp3_read_f32(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> DecodedSoundFile:
+def mp3_read_f32(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio data. Resulting sample format is 32 bits float."""
     config = ffi.new("drmp3_config *")
-    config.outputChannels = want_nchannels
-    config.outputSampleRate = want_sample_rate
     num_frames = ffi.new("drmp3_uint64 *")
     memory = lib.drmp3_open_memory_and_read_pcm_frames_f32(data, len(data), config, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode data")
     try:
         samples = array.array('f')
-        buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 4)
+        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 4)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate,
-                                SampleFormat.FLOAT32, samples)
+        return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.FLOAT32, samples)
     finally:
         lib.drmp3_free(memory, ffi.NULL)
 
 
-def mp3_read_s16(data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> DecodedSoundFile:
+def mp3_read_s16(data: bytes) -> DecodedSoundFile:
     """Reads and decodes the whole mp3 audio data. Resulting sample format is 16 bits signed integer."""
     config = ffi.new("drmp3_config *")
-    config.outputChannels = want_nchannels
-    config.outputSampleRate = want_sample_rate
     num_frames = ffi.new("drmp3_uint64 *")
     memory = lib.drmp3_open_memory_and_read_pcm_frames_s16(data, len(data), config, num_frames, ffi.NULL)
     if not memory:
         raise DecodeError("cannot load/decode data")
     try:
         samples = _create_int_array(2)
-        buffer = ffi.buffer(memory, num_frames[0] * config.outputChannels * 2)
+        buffer = ffi.buffer(memory, num_frames[0] * config.channels * 2)
         samples.frombytes(buffer)
-        return DecodedSoundFile("<memory>", config.outputChannels, config.outputSampleRate,
-                                SampleFormat.SIGNED16, samples)
+        return DecodedSoundFile("<memory>", config.channels, config.sampleRate, SampleFormat.SIGNED16, samples)
     finally:
         lib.drmp3_free(memory, ffi.NULL)
 

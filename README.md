@@ -210,19 +210,19 @@ stream_file() instead.
 > Fetch some information about the audio data (mp3 format).
 
 
-*function*  ``mp3_read_f32  (data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+*function*  ``mp3_read_f32  (data: bytes) -> miniaudio.DecodedSoundFile``
 > Reads and decodes the whole mp3 audio data. Resulting sample format is 32 bits float.
 
 
-*function*  ``mp3_read_file_f32  (filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+*function*  ``mp3_read_file_f32  (filename: str) -> miniaudio.DecodedSoundFile``
 > Reads and decodes the whole mp3 audio file. Resulting sample format is 32 bits float.
 
 
-*function*  ``mp3_read_file_s16  (filename: str, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+*function*  ``mp3_read_file_s16  (filename: str) -> miniaudio.DecodedSoundFile``
 > Reads and decodes the whole mp3 audio file. Resulting sample format is 16 bits signed integer.
 
 
-*function*  ``mp3_read_s16  (data: bytes, want_nchannels: int = 0, want_sample_rate: int = 0) -> miniaudio.DecodedSoundFile``
+*function*  ``mp3_read_s16  (data: bytes) -> miniaudio.DecodedSoundFile``
 > Reads and decodes the whole mp3 audio data. Resulting sample format is 16 bits signed integer.
 
 
@@ -328,7 +328,7 @@ stream_file() instead.
 
 *class*  ``CaptureDevice``
 
-``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio capture (recording).
 
 > *method*  ``close  (self) ``
@@ -369,7 +369,7 @@ callback generator as raw bytes. (it should already be started before)
 
 *class*  ``DuplexStream``
 
-``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend._CDataBase, NoneType] = None, capture_device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > Joins a capture device and a playback device.
 
 > *method*  ``close  (self) ``
@@ -393,7 +393,7 @@ already be started before passing it in)
 
 *class*  ``PlaybackDevice``
 
-``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio playback.
 
 > *method*  ``close  (self) ``
