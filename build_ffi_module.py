@@ -756,6 +756,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
     void ma_zero_pcm_frames(void* p, ma_uint32 frameCount, ma_format format, ma_uint32 channels);
+    void ma_free(void* p, const ma_allocation_callbacks* pAllocationCallbacks);
 
     void init_miniaudio(void);
     void *malloc(size_t size);

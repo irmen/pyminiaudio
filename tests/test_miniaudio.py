@@ -223,3 +223,11 @@ def test_wav_read():
     sound = miniaudio.wav_read_f32(data)
     assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
     assert sound.sample_rate == 22050
+
+
+def test_decode():
+    data = load_sample("music.ogg")
+    decoded = miniaudio.decode(data, miniaudio.SampleFormat.FLOAT32, sample_rate=32000, dither=miniaudio.DitherMode.TRIANGLE)
+    assert decoded.sample_format == miniaudio.SampleFormat.FLOAT32
+    assert decoded.sample_rate == 32000
+    assert decoded.num_frames > 200000

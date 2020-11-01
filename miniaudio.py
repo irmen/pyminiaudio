@@ -931,6 +931,7 @@ def decode_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED
             raise DecodeError("failed to decode file", result)
         buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
         samples.frombytes(buffer)
+        lib.ma_free(memory[0], ffi.NULL)
         return DecodedSoundFile(filename, nchannels, sample_rate, output_format, samples)
 
 
@@ -947,6 +948,7 @@ def decode(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16,
             raise DecodeError("failed to decode data", result)
         buffer = ffi.buffer(memory[0], frames[0] * nchannels * sample_width)
         samples.frombytes(buffer)
+        lib.ma_free(memory[0], ffi.NULL)
         return DecodedSoundFile("<memory>", nchannels, sample_rate, output_format, samples)
 
 
