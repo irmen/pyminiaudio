@@ -784,7 +784,7 @@ if os.name == "posix":
     libraries = ["m", "pthread", "dl"]
     compiler_args = ["-g1", "-O3", "-ffast-math"]
     if "86" in platform.machine():
-        compiler_args.extend([ "-msse", "-mfpmath=sse"])
+        compiler_args.extend([ "-msse2" ])
     if "arm" in platform.machine():
         compiler_args.extend([ "-mtune=native", "-march=native" ])
 
