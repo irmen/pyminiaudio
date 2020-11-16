@@ -100,9 +100,8 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 ## API
 
-
 *enum class*  ``Backend``
- names:  ``WASAPI`` ``DSOUND`` ``WINMM`` ``COREAUDIO`` ``SNDIO`` ``AUDIO4`` ``OSS`` ``PULSEAUDIO`` ``ALSA`` ``JACK`` ``AAUDIO`` ``OPENSL`` ``WEBAUDIO`` ``NULL``
+ names:  ``WASAPI`` ``DSOUND`` ``WINMM`` ``COREAUDIO`` ``SNDIO`` ``AUDIO4`` ``OSS`` ``PULSEAUDIO`` ``ALSA`` ``JACK`` ``AAUDIO`` ``OPENSL`` ``WEBAUDIO`` ``CUSTOM`` ``NULL``
 > Operating system audio backend to use (only a subset will be available)
 
 
@@ -198,8 +197,26 @@ a fixed chunk size and cannot be used as a generic miniaudio decoder input strea
 stream_file() instead.
 
 
+*function*  ``get_enabled_backends  () -> Set[miniaudio.Backend]``
+> Returns the set of available backends by the compilation environment for the underlying miniaudio
+C library
+
+
 *function*  ``get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
 > Fetch some information about the audio file.
+
+
+*function*  ``is_backend_enabled  (backend: miniaudio.Backend) -> bool``
+> Determines whether or not the given backend is available by the compilation environment for the
+underlying miniaudio C library
+
+
+*function*  ``is_loopback_supported  (backend: miniaudio.Backend) -> bool``
+> Determines whether or not loopback mode is support by a backend.
+
+
+*function*  ``lib_version  () -> str``
+> Returns the version string of the underlying miniaudio C library
 
 
 *function*  ``mp3_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
