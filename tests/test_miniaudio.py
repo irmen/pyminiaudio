@@ -231,3 +231,25 @@ def test_decode():
     assert decoded.sample_format == miniaudio.SampleFormat.FLOAT32
     assert decoded.sample_rate == 32000
     assert decoded.num_frames > 200000
+
+
+def test_version():
+    ver = miniaudio.lib_version()
+    assert len(ver) > 3
+    assert '.' in ver
+
+
+def test_is_backend_enabled():
+    assert miniaudio.is_backend_enabled(miniaudio.Backend.NULL)
+    assert not miniaudio.is_backend_enabled(miniaudio.Backend.AAUDIO)
+
+
+def test_enabled_backends():
+    enabled = miniaudio.get_enabled_backends()
+    assert len(enabled) > 0
+    assert miniaudio.Backend.NULL in enabled
+
+
+def test_is_loopback_supported():
+    assert not miniaudio.is_loopback_supported(miniaudio.Backend.NULL)
+    assert not miniaudio.is_loopback_supported(miniaudio.Backend.JACK)

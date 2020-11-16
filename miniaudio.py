@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.38.dev0"
+__version__ = "1.38"
 
 
 import abc
@@ -15,7 +15,7 @@ import io
 import array
 import inspect
 from enum import Enum
-from typing import Generator, List, Dict, Optional, Union, Any, Callable
+from typing import Generator, List, Dict, Set, Optional, Union, Any, Callable
 from _miniaudio import ffi, lib
 try:
     import numpy
@@ -82,6 +82,7 @@ class Backend(Enum):
     AAUDIO = lib.ma_backend_aaudio
     OPENSL = lib.ma_backend_opensl
     WEBAUDIO = lib.ma_backend_webaudio
+    CUSTOM = lib.ma_backend_custom
     NULL = lib.ma_backend_null
 
 
@@ -1468,3 +1469,29 @@ class WavFileReadStream(io.RawIOBase):
     def close(self) -> None:
         """Close the file"""
         pass
+
+
+# miscellaneous
+
+def lib_version() -> str:
+    """Returns the version string of the underlying miniaudio C library"""
+    return ffi.string(lib.ma_version_string()).decode()
+
+
+def is_backend_enabled(backend: Backend) -> bool:
+    """Determines whether or not the given backend is available by the compilation environment for the underlying miniaudio C library"""
+    return bool(lib.ma_is_backend_enabled(backend.value))
+
+
+def get_enabled_backends() -> Set[Backend]:
+    """Returns the set of available backends by the compilation environment for the underlying miniaudio C library"""
+    with ffi.new("size_t *") as count, ffi.new("ma_backend[30]") as backends:
+        result = lib.ma_get_enabled_backends(backends, 30, count)
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("can't determine enabled backends")
+        return set(Backend(b) for b in backends[0:count[0]])
+
+
+def is_loopback_supported(backend: Backend) -> bool:
+    """Determines whether or not loopback mode is support by a backend."""
+    return bool(lib.ma_is_loopback_supported(backend.value))

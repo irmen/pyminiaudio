@@ -393,6 +393,7 @@ typedef enum
     ma_backend_aaudio,
     ma_backend_opensl,
     ma_backend_webaudio,
+    ma_backend_custom,
     ma_backend_null    /* <-- Must always be the last item. Lowest priority, and used as the terminator for backend enumeration. */
 } ma_backend;
 
@@ -715,6 +716,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
 
     ma_result ma_decoder_uninit(ma_decoder* pDecoder);
     ma_uint64 ma_decoder_get_length_in_pcm_frames(ma_decoder* pDecoder);
+    ma_result ma_decoder_get_available_frames(ma_decoder* pDecoder, ma_uint64* pAvailableFrames);
     ma_uint64 ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount);
     ma_result ma_decoder_seek_to_pcm_frame(ma_decoder* pDecoder, ma_uint64 frameIndex);
     ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
@@ -753,6 +755,11 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
 
 
     /**** misc ****/
+    const char* ma_version_string(void);
+    ma_bool32 ma_is_backend_enabled(ma_backend backend);
+    ma_result ma_get_enabled_backends(ma_backend* pBackends, size_t backendCap, size_t* pBackendCount);
+    ma_bool32 ma_is_loopback_supported(ma_backend backend);
+    
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
     void ma_zero_pcm_frames(void* p, ma_uint32 frameCount, ma_format format, ma_uint32 channels);
