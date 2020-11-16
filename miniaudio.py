@@ -1258,6 +1258,9 @@ class CaptureDevice(AbstractDevice):
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
+        if self._device.pContext.backend == lib.ma_backend_null:
+            if backends and Backend.NULL not in backends:
+                raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
     def start(self, callback_generator: CaptureCallbackGeneratorType,
@@ -1311,6 +1314,9 @@ class PlaybackDevice(AbstractDevice):
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
+        if self._device.pContext.backend == lib.ma_backend_null:
+            if backends and Backend.NULL not in backends:
+                raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
     def start(self, callback_generator: PlaybackCallbackGeneratorType,
@@ -1374,6 +1380,9 @@ class DuplexStream(AbstractDevice):
         result = lib.ma_device_init(self._context, ffi.addressof(self._devconfig), self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to init device", result)
+        if self._device.pContext.backend == lib.ma_backend_null:
+            if backends and Backend.NULL not in backends:
+                raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
     def start(self, callback_generator: DuplexCallbackGeneratorType,

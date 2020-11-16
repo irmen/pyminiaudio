@@ -23,7 +23,7 @@ def test_devices():
 
 
 @py35skip
-def test_stop_callback_capture(backends, jackd_server):
+def test_stop_callback_capture(backends):
     stop_callback = mock.Mock()
 
     try:
@@ -47,7 +47,7 @@ def test_stop_callback_capture(backends, jackd_server):
 
 
 @py35skip
-def test_stop_callback_playback(backends, jackd_server):
+def test_stop_callback_playback(backends):
     stop_callback = mock.Mock()
 
     playback = miniaudio.PlaybackDevice(backends=backends)
@@ -64,7 +64,7 @@ def test_stop_callback_playback(backends, jackd_server):
 
 
 @py35skip
-def test_stop_callback_duplex(backends, jackd_server):
+def test_stop_callback_duplex(backends):
     stop_callback = mock.Mock()
 
     try:
