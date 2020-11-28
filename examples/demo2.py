@@ -28,10 +28,13 @@ class FileSource(miniaudio.StreamableSource):
         self.file.seek(offset, whence)
         return True
 
+    def close(self) -> None:
+        self.file.close()
+
 
 print("Audio file playing in the background. Press enter to stop playback. ")
-source = FileSource("music.ogg")
-stream = miniaudio.stream_any(source)
-with miniaudio.PlaybackDevice() as device:
-    device.start(stream)
-    input()
+with FileSource("music.ogg") as source:
+    stream = miniaudio.stream_any(source)
+    with miniaudio.PlaybackDevice() as device:
+        device.start(stream)
+        input()

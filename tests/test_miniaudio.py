@@ -197,10 +197,32 @@ def test_mp3_read():
 def test_mp3_stream():
     frames_to_read = 256
     stream = miniaudio.mp3_stream_file("examples/samples/music.mp3", frames_to_read)
-    assert len(next(stream)) == 512
-    assert len(next(stream)) == 512
-    assert len(next(stream)) == 512
-    assert len(next(stream)) == 512
+    assert len(next(stream)) >= 512
+    assert len(next(stream)) >= 512
+    stream.close()
+
+
+def test_wav_stream():
+    frames_to_read = 256
+    stream = miniaudio.wav_stream_file("examples/samples/music.wav", frames_to_read)
+    assert len(next(stream)) >= 512
+    assert len(next(stream)) >= 512
+    stream.close()
+
+
+def test_flac_stream():
+    frames_to_read = 256
+    stream = miniaudio.flac_stream_file("examples/samples/music.flac", frames_to_read)
+    assert len(next(stream)) >= 512
+    assert len(next(stream)) >= 512
+    stream.close()
+
+
+def test_oggvorbis_stream():
+    frames_to_read = 256
+    stream = miniaudio.vorbis_stream_file("examples/samples/music.ogg", frames_to_read)
+    assert len(next(stream)) >= 512
+    assert len(next(stream)) >= 512
     stream.close()
 
 
@@ -253,3 +275,23 @@ def test_enabled_backends():
 def test_is_loopback_supported():
     assert not miniaudio.is_loopback_supported(miniaudio.Backend.NULL)
     assert not miniaudio.is_loopback_supported(miniaudio.Backend.JACK)
+
+
+def test_stream_any_unknown(streamable_unknown_source):
+    miniaudio.stream_any(streamable_unknown_source, miniaudio.FileFormat.UNKNOWN)
+
+
+def test_stream_any_mp3(streamable_mp3_source):
+    miniaudio.stream_any(streamable_mp3_source, miniaudio.FileFormat.MP3)
+
+
+def test_stream_any_wav(streamable_wav_source):
+    miniaudio.stream_any(streamable_wav_source, miniaudio.FileFormat.WAV)
+
+
+def test_stream_any_flac(streamable_flac_source):
+    miniaudio.stream_any(streamable_flac_source, miniaudio.FileFormat.FLAC)
+
+
+def test_stream_any_vorbis(streamable_vorbis_source):
+    miniaudio.stream_any(streamable_vorbis_source, miniaudio.FileFormat.VORBIS)
