@@ -347,7 +347,7 @@ stream_file() instead.
 
 *class*  ``CaptureDevice``
 
-``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio capture (recording).
 
 > *method*  ``close  (self) ``
@@ -388,7 +388,7 @@ callback generator as raw bytes. (it should already be started before)
 
 *class*  ``DuplexStream``
 
-``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend._CDataBase, NoneType] = None, capture_device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Union[_cffi_backend.CData, NoneType] = None, capture_device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > Joins a capture device and a playback device.
 
 > *method*  ``close  (self) ``
@@ -409,7 +409,19 @@ already be started before passing it in)
 ``IceCastClient  (self, url: str, update_stream_title: Callable[[ForwardRef('IceCastClient'), str], NoneType] = None) ``
 > A simple client for IceCast audio streams as miniaudio streamable source. If the stream has Icy
 Meta Data, the stream_title attribute will be updated with the actual title taken from the meta
-data. You can also provide a callback to be called when a new stream title is available.
+data. You can also provide a callback to be called when a new stream title is available. The
+downloading of the data from the internet is done in a background thread and it tries to keep a
+(small) buffer filled with available data to read.
+
+> *method*  ``close  (self) ``
+> > Stop the stream, aborting the background downloading.
+
+> *method*  ``read  (self, num_bytes: int) -> bytes``
+> > Read a chunk of data from the stream.
+
+> *method*  ``seek  (self, offset: int, origin: miniaudio.SeekOrigin) -> bool``
+> > Override this if the stream supports seeking. Note: seek support is sometimes not needed if you
+give the file type to a decoder upfront. You can ignore this method then.
 
 
 *class*  ``MiniaudioError``
@@ -420,7 +432,7 @@ data. You can also provide a callback to be called when a new stream title is av
 
 *class*  ``PlaybackDevice``
 
-``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend._CDataBase, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[_cffi_backend.CData, NoneType] = None, callback_periods: int = 0, backends: Union[List[miniaudio.Backend], NoneType] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio playback.
 
 > *method*  ``close  (self) ``
@@ -448,6 +460,16 @@ The generator should already be started before passing it in.
 ``StreamableSource  (self, /, *args, **kwargs)``
 > Base class for streams of audio data bytes. Can be used as a contextmanager, to properly call
 close().
+
+> *method*  ``close  (self) ``
+> > Override this to properly close the stream and free resources.
+
+> *method*  ``read  (self, num_bytes: int) -> Union[bytes, memoryview]``
+> > override this to provide data bytes to the consumer of the stream
+
+> *method*  ``seek  (self, offset: int, origin: miniaudio.SeekOrigin) -> bool``
+> > Override this if the stream supports seeking. Note: seek support is sometimes not needed if you
+give the file type to a decoder upfront. You can ignore this method then.
 
 
 *class*  ``WavFileReadStream``

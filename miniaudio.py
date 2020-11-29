@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.40"
+__version__ = "1.41"
 
 
 import abc
@@ -1042,14 +1042,19 @@ class StreamableSource(abc.ABC):
 
     @abc.abstractmethod
     def read(self, num_bytes: int) -> Union[bytes, memoryview]:
+        """override this to provide data bytes to the consumer of the stream"""
         pass
 
     def seek(self, offset: int, origin: SeekOrigin) -> bool:
-        # Note: seek support is usually not needed if you give the file type
-        # to the decoder upfront. You can ignore this method then.
+        """
+        Override this if the stream supports seeking.
+        Note: seek support is sometimes not needed if you give the file type
+        to a decoder upfront. You can ignore this method then.
+        """
         return False
 
     def close(self) -> None:
+        """Override this to properly close the stream and free resources."""
         pass
 
     def __enter__(self) -> "StreamableSource":
@@ -1065,6 +1070,8 @@ class IceCastClient(StreamableSource):
     If the stream has Icy Meta Data, the stream_title attribute will be updated
     with the actual title taken from the meta data.
     You can also provide a callback to be called when a new stream title is available.
+    The downloading of the data from the internet is done in a background thread
+    and it tries to keep a (small) buffer filled with available data to read.
     """
 
     BLOCK_SIZE = 8*1024
@@ -1087,7 +1094,7 @@ class IceCastClient(StreamableSource):
             self.station_name = result.headers["icy-name"]
             stream_format = result.headers["Content-Type"]
             self.audio_format = self.determine_audio_format(stream_format)
-        self._download_thread = threading.Thread(target=self.download_stream, daemon=True)
+        self._download_thread = threading.Thread(target=self._download_stream, daemon=True)
         self._download_thread.start()
 
     def determine_audio_format(self, stream_format: str) -> FileFormat:
@@ -1101,6 +1108,7 @@ class IceCastClient(StreamableSource):
             return FileFormat.UNKNOWN
 
     def read(self, num_bytes: int) -> bytes:
+        """Read a chunk of data from the stream."""
         while len(self._buffer) < num_bytes:
             time.sleep(0.1)
         with self._buffer_lock:
@@ -1109,6 +1117,7 @@ class IceCastClient(StreamableSource):
             return chunk
 
     def close(self) -> None:
+        """Stop the stream, aborting the background downloading."""
         self._stop_stream = True
         self._download_thread.join()
 
@@ -1118,7 +1127,7 @@ class IceCastClient(StreamableSource):
             b += fileobject.read(size)
         return b
 
-    def download_stream(self) -> None:
+    def _download_stream(self) -> None:
         req = urllib.request.Request(self.url, headers={"icy-metadata": "1"})
         with urllib.request.urlopen(req) as result:
             self.station_genre = result.headers["icy-genre"]
@@ -1144,7 +1153,7 @@ class IceCastClient(StreamableSource):
                     meta_size = 16 * self._readall(result, 1)[0]
                     metadata = str(self._readall(result, meta_size).strip(b"\0"), "utf-8", errors="replace")
                     if metadata:
-                        search = re.search("StreamTItle='(.*?)'", metadata, re.IGNORECASE)
+                        search = re.search("StreamTitle='(.*?)'", metadata, re.IGNORECASE)
                         if search:
                             self.stream_title = search.group(1)
                             if self._update_title:
