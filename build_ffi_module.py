@@ -523,6 +523,7 @@ typedef struct
 {
     ma_device_id id;
     char name[256];
+    ma_bool32 isDefault;
     ma_uint32 formatCount;
     ma_format formats[ma_format_count];
     ma_uint32 minChannels;

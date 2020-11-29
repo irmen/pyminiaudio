@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.38"
+__version__ = "1.39"
 
 
 import abc
@@ -1109,7 +1109,7 @@ class IceCastClient(StreamableSource):
         except StopIteration:
             pass
 
-    def stream(self) -> bytes:
+    def stream(self) -> Generator[bytes, None, None]:
         req = urllib.request.Request(self.url, headers={"icy-metadata": "1"})
         with urllib.request.urlopen(req) as result:
             self.station_genre = result.headers["icy-genre"]
@@ -1134,9 +1134,11 @@ class IceCastClient(StreamableSource):
                         continue
                     metadata = str(audiodata[meta_interval + 1: meta_interval + 1 + meta_size].strip(b"\0"), "utf-8", errors="replace")
                     if metadata:
-                        self.stream_title = re.search("StreamTitle='(.*?)'", metadata).group(1)
-                        if self._update_title:
-                            self._update_title(self, self.stream_title)
+                        search = re.search("StreamTitle='(.*?)'", metadata)
+                        if search:
+                            self.stream_title = search.group(1)
+                            if self._update_title:
+                                self._update_title(self, self.stream_title)
                     yield audiodata[:meta_interval]
                     audiodata = audiodata[meta_interval + 1 + meta_size:]
                     if self._stop_stream:
@@ -1363,8 +1365,8 @@ class CaptureDevice(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: CaptureCallbackGeneratorType,
-              stop_callback: Union[Callable, None] = None) -> None:      # type: ignore
+    def start(self, callback_generator: CaptureCallbackGeneratorType,       # type: ignore
+              stop_callback: Union[Callable, None] = None) -> None:
         """Start the audio device: capture (recording) begins.
         The recorded audio data is sent to the given callback generator as raw bytes.
         (it should already be started before)"""
@@ -1419,8 +1421,8 @@ class PlaybackDevice(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: PlaybackCallbackGeneratorType,
-              stop_callback: Union[Callable, None] = None) -> None:     # type: ignore
+    def start(self, callback_generator: PlaybackCallbackGeneratorType,      # type: ignore
+              stop_callback: Union[Callable, None] = None) -> None:
         """Start the audio device: playback begins. The audio data is provided by the given callback generator.
         The generator gets sent the required number of frames and should yield the sample data
         as raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
@@ -1485,8 +1487,8 @@ class DuplexStream(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: DuplexCallbackGeneratorType,
-              stop_callback: Union[Callable, None] = None) -> None:   # type: ignore
+    def start(self, callback_generator: DuplexCallbackGeneratorType,        # type: ignore
+              stop_callback: Union[Callable, None] = None) -> None:
         """Start the audio device: playback and capture begin.
         The audio data for playback is provided by the given callback generator, which is sent the
         recorded audio data at the same time.

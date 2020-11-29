@@ -109,9 +109,6 @@ def test_cffi_api_calls_parameters_correct():
                         if len(node.args) != len(ftype.args):
                             errors.append(TypeError("cffi function lib.{} expected {} args, called with {} args  at line {} col {} of {}"
                                             .format(node.func.attr, len(ftype.args), len(node.args), lineno, column, cffi_module.__file__)))
-            elif isinstance(node.func.value, ast.Subscript):
-                if node.func.value.value.func.value.value.id == "lib":
-                    raise NotImplementedError("failed to check subscript Ast node")
     if errors:
         raise TypeError(errors)
 
