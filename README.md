@@ -406,7 +406,7 @@ already be started before passing it in)
 
 *class*  ``IceCastClient``
 
-``IceCastClient  (self, url: str, block_size: int = 16384, update_stream_title: Callable[[ForwardRef('IceCastClient'), str], NoneType] = None) ``
+``IceCastClient  (self, url: str, update_stream_title: Callable[[ForwardRef('IceCastClient'), str], NoneType] = None) ``
 > A simple client for IceCast audio streams as miniaudio streamable source. If the stream has Icy
 Meta Data, the stream_title attribute will be updated with the actual title taken from the meta
 data. You can also provide a callback to be called when a new stream title is available.
