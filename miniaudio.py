@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.39"
+__version__ = "1.40"
 
 
 import abc
@@ -16,6 +16,8 @@ import re
 import array
 import urllib.request
 import inspect
+import time
+import threading
 from enum import Enum
 from typing import Generator, List, Dict, Set, Optional, Union, Any, Callable
 from _miniaudio import ffi, lib
@@ -1065,17 +1067,19 @@ class IceCastClient(StreamableSource):
     You can also provide a callback to be called when a new stream title is available.
     """
 
-    def __init__(self, url: str, block_size: int = 16384,
-                 update_stream_title: Callable[['IceCastClient', str], None] = None) -> None:
+    BLOCK_SIZE = 8*1024
+    BUFFER_SIZE = 64*1024
+
+    def __init__(self, url: str, update_stream_title: Callable[['IceCastClient', str], None] = None) -> None:
         self.url = url
         self.stream_title = "???"
         self.station_genre = "???"
         self.station_name = "???"
         self.audio_info = ""
         self.audio_format = FileFormat.UNKNOWN
-        self.block_size = block_size
         self._stop_stream = False
         self._buffer = b""
+        self._buffer_lock = threading.Lock()
         self._update_title = update_stream_title
         req = urllib.request.Request(url, headers={"icy-metadata": "1"})
         with urllib.request.urlopen(req) as result:
@@ -1083,7 +1087,8 @@ class IceCastClient(StreamableSource):
             self.station_name = result.headers["icy-name"]
             stream_format = result.headers["Content-Type"]
             self.audio_format = self.determine_audio_format(stream_format)
-        self._stream = self.stream()
+        self._download_thread = threading.Thread(target=self.download_stream, daemon=True)
+        self._download_thread.start()
 
     def determine_audio_format(self, stream_format: str) -> FileFormat:
         if stream_format == "audio/mpeg":
@@ -1097,19 +1102,23 @@ class IceCastClient(StreamableSource):
 
     def read(self, num_bytes: int) -> bytes:
         while len(self._buffer) < num_bytes:
-            self._buffer += next(self._stream)
-        chunk = self._buffer[:num_bytes]
-        self._buffer = self._buffer[num_bytes:]
-        return chunk
+            time.sleep(0.1)
+        with self._buffer_lock:
+            chunk = self._buffer[:num_bytes]
+            self._buffer = self._buffer[num_bytes:]
+            return chunk
 
     def close(self) -> None:
         self._stop_stream = True
-        try:
-            next(self._stream)
-        except StopIteration:
-            pass
+        self._download_thread.join()
 
-    def stream(self) -> Generator[bytes, None, None]:
+    def _readall(self, fileobject, size: int) -> bytes:
+        b = b""
+        while len(b) < size:
+            b += fileobject.read(size)
+        return b
+
+    def download_stream(self) -> None:
         req = urllib.request.Request(self.url, headers={"icy-metadata": "1"})
         with urllib.request.urlopen(req) as result:
             self.station_genre = result.headers["icy-genre"]
@@ -1123,29 +1132,32 @@ class IceCastClient(StreamableSource):
             else:
                 meta_interval = 0
             if meta_interval:
-                audiodata = b""
+                # note: the meta_interval is fixed for the entire stream, so just use that as chunk size
                 while not self._stop_stream:
-                    chunk = result.read(self.block_size)
-                    audiodata += chunk
-                    if len(audiodata) < meta_interval + 1:
-                        continue
-                    meta_size = 16 * audiodata[meta_interval]
-                    if len(audiodata) < meta_interval + 1 + meta_size:
-                        continue
-                    metadata = str(audiodata[meta_interval + 1: meta_interval + 1 + meta_size].strip(b"\0"), "utf-8", errors="replace")
+                    while len(self._buffer) >= self.BUFFER_SIZE:
+                        time.sleep(0.2)
+                        if self._stop_stream:
+                            return
+                    chunk = self._readall(result, meta_interval)
+                    with self._buffer_lock:
+                        self._buffer += chunk
+                    meta_size = 16 * self._readall(result, 1)[0]
+                    metadata = str(self._readall(result, meta_size).strip(b"\0"), "utf-8", errors="replace")
                     if metadata:
-                        search = re.search("StreamTitle='(.*?)'", metadata)
+                        search = re.search("StreamTItle='(.*?)'", metadata, re.IGNORECASE)
                         if search:
                             self.stream_title = search.group(1)
                             if self._update_title:
                                 self._update_title(self, self.stream_title)
-                    yield audiodata[:meta_interval]
-                    audiodata = audiodata[meta_interval + 1 + meta_size:]
-                    if self._stop_stream:
-                        return
             else:
                 while not self._stop_stream:
-                    yield result.read(self.block_size)
+                    while len(self._buffer) >= self.BUFFER_SIZE:
+                        time.sleep(0.2)
+                        if self._stop_stream:
+                            return
+                    chunk = result.read(self.BLOCK_SIZE)
+                    with self._buffer_lock:
+                        self._buffer += chunk
 
 
 def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.UNKNOWN,
