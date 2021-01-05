@@ -33,7 +33,7 @@ Some of the main aspects of this are:
    depending on the sample width (rather than a raw block of bytes)
 
 
-*Requires Python 3.5 or newer.  Also works on pypy3 (because it uses cffi).*
+*Requires Python 3.6 or newer.  Also works on pypy3 (because it uses cffi).*
 
 The library is primarily distributed in source form so you need a C compiler to build and install this
 (note: the setup script takes care of the actual compilation process, no need to worry about compiling things yourself).

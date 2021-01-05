@@ -1,13 +1,10 @@
 import os
-import sys
 import enum
 import re
 import textwrap
 import unittest
 from setuptools import setup
 
-if sys.version_info < (3, 5):
-    raise SystemExit("Miniaudio requires Python 3.5 or newer")
 
 miniaudio_path = os.path.abspath(".")  # to make sure the compiler can find the required include files
 PKG_VERSION = re.search(r'^__version__\s*=\s*"(.+)"', open("miniaudio.py", "rt").read(), re.MULTILINE).groups()[0]
