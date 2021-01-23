@@ -1310,6 +1310,7 @@ class AbstractDevice:
             result = lib.ma_device_stop(self._device)
             if result != lib.MA_SUCCESS:
                 raise MiniaudioError("failed to stop audio device", result)
+        self.running = False
 
     def close(self) -> None:
         """

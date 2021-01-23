@@ -551,18 +551,20 @@ typedef struct
     void* pUserData;
     struct
     {
-        ma_device_id* pDeviceID;
+        const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
         ma_channel channelMap[MA_MAX_CHANNELS];
+        ma_channel_mix_mode channelMixMode;
         ma_share_mode shareMode;
     } playback;
     struct
     {
-        ma_device_id* pDeviceID;
+        const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
         ma_channel channelMap[MA_MAX_CHANNELS];
+        ma_channel_mix_mode channelMixMode;
         ma_share_mode shareMode;
     } capture;
 
