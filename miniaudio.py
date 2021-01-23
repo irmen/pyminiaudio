@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.42.dev0"
+__version__ = "1.42"
 
 
 import abc
@@ -1317,8 +1317,10 @@ class AbstractDevice:
         Halt playback or capture and close down the device.
         If you use the device as a context manager, it will be closed automatically.
         """
-        self.running = False
-        self.callback_generator = None
+        try:
+            self.stop()
+        except MiniaudioError:
+            pass
         if self._device is not None:
             lib.ma_device_uninit(self._device)
             self._device = None
