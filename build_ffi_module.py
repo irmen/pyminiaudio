@@ -516,6 +516,7 @@ struct ma_device {
     void* pUserData;                        /* Application defined data. */
     volatile float masterVolumeFactor;      /* Volatile so we can use some thread safety when applying volume to periods. */
     ...;
+    
 };
 
 
@@ -543,8 +544,8 @@ typedef struct
     ma_uint32 periodSizeInFrames;
     ma_uint32 periodSizeInMilliseconds;
     ma_uint32 periods;
-    ma_bool32 noPreZeroedOutputBuffer;  /* When set to true, the contents of the output buffer passed into the data callback will be left undefined rather than initialized to zero. */
-    ma_bool32 noClip;                   /* When set to true, the contents of the output buffer passed into the data callback will be clipped after returning. Only applies when the playback sample format is f32. */
+    ma_bool8 noPreZeroedOutputBuffer;   /* When set to true, the contents of the output buffer passed into the data callback will be left undefined rather than initialized to zero. */
+    ma_bool8 noClip;                    /* When set to true, the contents of the output buffer passed into the data callback will be clipped after returning. Only applies when the playback sample format is f32. */
     ma_device_callback_proc dataCallback;
     ma_stop_proc stopCallback;
     void* pUserData;
@@ -567,10 +568,10 @@ typedef struct
 
     struct
     {
-        ma_bool32 noAutoConvertSRC;     /* When set to true, disables the use of AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM. */
-        ma_bool32 noDefaultQualitySRC;  /* When set to true, disables the use of AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY. */
-        ma_bool32 noAutoStreamRouting;  /* Disables automatic stream routing. */
-        ma_bool32 noHardwareOffloading; /* Disables WASAPI's hardware offloading feature. */
+        ma_bool8 noAutoConvertSRC;     /* When set to true, disables the use of AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM. */
+        ma_bool8 noDefaultQualitySRC;  /* When set to true, disables the use of AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY. */
+        ma_bool8 noAutoStreamRouting;  /* Disables automatic stream routing. */
+        ma_bool8 noHardwareOffloading; /* Disables WASAPI's hardware offloading feature. */
     } wasapi;
     struct
     {
