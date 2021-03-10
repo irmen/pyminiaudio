@@ -28,6 +28,10 @@ win_wheels: test
 linux_wheel: test
 	rm -f dist/* *.so
 	python setup.py bdist_wheel
+	@echo
+	@echo
+	@echo "REMEMBER: the Linux wheel may be very system/cpu dependent so should you really use this? Beware."
+	@echo
 
 dist: test
 	rm -f dist/* *.so
