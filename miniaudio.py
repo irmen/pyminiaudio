@@ -5,14 +5,13 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.44"
+__version__ = "1.45"
 
 
 import abc
 import sys
 import os
 import io
-import re
 import array
 import urllib.request
 import inspect
@@ -1153,11 +1152,12 @@ class IceCastClient(StreamableSource):
                     meta_size = 16 * self._readall(result, 1)[0]
                     metadata = str(self._readall(result, meta_size).strip(b"\0"), "utf-8", errors="replace")
                     if metadata:
-                        search = re.search("StreamTitle='(.*?)'", metadata, re.IGNORECASE)
-                        if search:
-                            self.stream_title = search.group(1)
+                        meta = self.parse_metadata(metadata)
+                        stream_title = meta.get("StreamTitle")
+                        if stream_title:
+                            self.stream_title = stream_title
                             if self._update_title:
-                                self._update_title(self, self.stream_title)
+                                self._update_title(self, stream_title)
             else:
                 while not self._stop_stream:
                     while len(self._buffer) >= self.BUFFER_SIZE:
@@ -1167,6 +1167,15 @@ class IceCastClient(StreamableSource):
                     chunk = result.read(self.BLOCK_SIZE)
                     with self._buffer_lock:
                         self._buffer += chunk
+
+    @staticmethod
+    def parse_metadata(metadata: str) -> Dict[str, str]:
+        meta = {}
+        for part in metadata.split(';'):
+            key, _, value = part.partition('=')
+            if key:
+                meta[key] = value.strip("'")
+        return meta
 
 
 def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.UNKNOWN,

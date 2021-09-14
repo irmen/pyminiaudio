@@ -102,7 +102,7 @@ def test_cffi_api_calls_parameters_correct():
 
 
 def load_sample(name):
-    with open("examples/samples/"+name, "rb") as f:
+    with open("examples/samples/" + name, "rb") as f:
         return f.read()
 
 
@@ -280,3 +280,25 @@ def test_stream_any_flac(streamable_flac_source):
 
 def test_stream_any_vorbis(streamable_vorbis_source):
     miniaudio.stream_any(streamable_vorbis_source, miniaudio.FileFormat.VORBIS)
+
+
+def test_icecastclient_metadata_parsing():
+    ic = miniaudio.IceCastClient
+    meta = ic.parse_metadata("")
+    assert meta == {}
+    meta = ic.parse_metadata("bogus")
+    assert meta == {"bogus": ""}
+    meta = ic.parse_metadata("bogus=")
+    assert meta == {"bogus": ""}
+    meta = ic.parse_metadata("StreamTitle=title")
+    assert meta == {"StreamTitle": "title"}
+    meta = ic.parse_metadata("StreamTitle='title'")
+    assert meta == {"StreamTitle": "title"}
+    meta = ic.parse_metadata("StreamTitle='title';")
+    assert meta == {"StreamTitle": "title"}
+    meta = ic.parse_metadata("StreamTitle='title';StreamUrl='http://something.url'")
+    assert meta == {"StreamTitle": "title", "StreamUrl": "http://something.url"}
+    meta = ic.parse_metadata("StreamTitle='title';StreamUrl='http://something.url';")
+    assert meta == {"StreamTitle": "title", "StreamUrl": "http://something.url"}
+    meta = ic.parse_metadata("StreamTitle='title'with'quotes';StreamUrl='http://something.url';")
+    assert meta == {"StreamTitle": "title'with'quotes", "StreamUrl": "http://something.url"}
