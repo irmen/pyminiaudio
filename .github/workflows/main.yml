@@ -21,7 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: fast-pytest
+        uses: paolorechia/fast-pytest-github-action@v1.0
+        with:
+          pytest_args: 'tests/'
+          requirements_file: requirements-dev.txt
+    
       - name: Run a multi-line script
-        run: |
-          pytest tests/
+        run:
           python -E -Wall -bb -c 'import miniaudio'        
