@@ -789,11 +789,17 @@ ffibuilder = FFI()
 ffibuilder.cdef(vorbis_defs + miniaudio_defs)
 
 
-libraries = []
-compiler_args = []
-if os.name == "posix":
-    libraries = ["m", "pthread", "dl"]
-    compiler_args = ["-g1", "-O3", "-ffast-math", "-mtune=native", "-march=native" ]
+compiler_args = ["-g1", "-O3", "-ffast-math"]
+libraries = ["m", "pthread", "dl"] if os.name == "posix" else []
+
+# determine appropriate compiler tuning options
+if platform.system() == "Darwin" and platform.machine() == "aarch64":
+    # Apple Silicon
+    compiler_args += ["-mtune=apple-latest", "-march=apple-latest"]
+elif "ppc64" in platform.system():
+    compiler_args += ["-mcpu=native"]
+else:
+    compiler_args += ["-mtune=native", "-march=native"]
 
 
 ffibuilder.set_source("_miniaudio", """
