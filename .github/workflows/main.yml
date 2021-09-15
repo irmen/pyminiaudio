@@ -1,8 +1,5 @@
-# This is a basic workflow to help you get started with Actions
-
 name: CI
 
-# Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
@@ -27,12 +24,9 @@ jobs:
 
       - name: test importability
         run:
-          python -E -Wall -bb -c 'import miniaudio'        
+          python -E -Wall -bb -c 'import miniaudio'
 
-      - name: fast-pytest
-        uses: paolorechia/fast-pytest-github-action@v1.0
-        with:
-          pytest_args: '-v tests/'
-          requirements_file:  'requirements-test.txt'
-          
-  
+      - name: pytest
+        run:
+          pip install -r requirements-test.txt
+          pytest -v tests/
