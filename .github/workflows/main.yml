@@ -32,7 +32,7 @@ jobs:
       - name: fast-pytest
         uses: paolorechia/fast-pytest-github-action@v1.0
         with:
-          pytest_args: -v tests/
-          requirements_file:  requirements-test.txt
+          pytest_args: '-v tests/'
+          requirements_file:  'requirements-test.txt'
           
   
