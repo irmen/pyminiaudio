@@ -27,6 +27,6 @@ jobs:
           python -E -Wall -bb -c 'import miniaudio'
 
       - name: pytest
-        run:
+        run: |
           pip install -r requirements-test.txt
           pytest -v tests/
