@@ -33,4 +33,6 @@ jobs:
         uses: paolorechia/fast-pytest-github-action@v1.0
         with:
           pytest_args: 'tests/'
+          requirements_file:  'requirements-test.txt'
+          
   
