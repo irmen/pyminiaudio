@@ -17,7 +17,7 @@ def test_stop_callback_capture(backends):
     stop_callback = mock.Mock()
 
     try:
-        capture = miniaudio.CaptureDevice(backends=backends)
+        capture = miniaudio.CaptureDevice(backends=backends, stop_callback=stop_callback)
     except miniaudio.MiniaudioError as me:
         if me.args[0] != "failed to init device":
             raise
@@ -26,7 +26,7 @@ def test_stop_callback_capture(backends):
     else:
         gen = dummy_generator()
         next(gen)
-        capture.start(gen, stop_callback)
+        capture.start(gen)
 
         assert capture.running is True
         # Simulate an unexpected stop.
@@ -39,10 +39,10 @@ def test_stop_callback_capture(backends):
 def test_stop_callback_playback(backends):
     stop_callback = mock.Mock()
 
-    playback = miniaudio.PlaybackDevice(backends=backends)
+    playback = miniaudio.PlaybackDevice(backends=backends, stop_callback=stop_callback)
     gen = dummy_generator()
     next(gen)
-    playback.start(gen, stop_callback)
+    playback.start(gen)
 
     assert playback.running is True
     # Simulate an unexpected stop.
@@ -56,7 +56,7 @@ def test_stop_callback_duplex(backends):
     stop_callback = mock.Mock()
 
     try:
-        duplex = miniaudio.DuplexStream(backends=backends)
+        duplex = miniaudio.DuplexStream(backends=backends, stop_callback=stop_callback)
     except miniaudio.MiniaudioError as me:
         if me.args[0] != "failed to init device":
             raise
@@ -65,7 +65,7 @@ def test_stop_callback_duplex(backends):
     else:
         gen = dummy_generator()
         next(gen)
-        duplex.start(gen, stop_callback)
+        duplex.start(gen)
 
         assert duplex.running is True
         # Simulate an unexpected stop.

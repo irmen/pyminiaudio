@@ -12,6 +12,7 @@ test:
 	python setup.py build
 	python setup.py test
 	python -m pytest -v tests
+	mypy miniaudio.py
 
 docs:
 	@python -c 'import setup; setup.make_md_docs("miniaudio")'

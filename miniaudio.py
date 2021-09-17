@@ -23,7 +23,7 @@ from _miniaudio import ffi, lib
 try:
     import numpy
 except ImportError:
-    numpy = None
+    numpy = None        # type: ignore
 
 lib.init_miniaudio()
 
@@ -1219,6 +1219,20 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
     return g
 
 
+def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
+                          progress_callback: Union[Callable[[int], None], None] = None,
+                          end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
+    frame_count = yield b""
+    try:
+        while True:
+            frame_count = yield sample_stream.send(frame_count)
+            if progress_callback:
+                progress_callback(frame_count)
+    except StopIteration:
+        if end_callback:
+            end_callback()
+
+
 @ffi.def_extern()
 def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int) -> int:
     if num_bytes <= 0 or not decoder.pUserData:
@@ -1283,9 +1297,10 @@ def _internal_stop_callback(device: ffi.CData) -> None:
 
 
 class AbstractDevice:
-    def __init__(self):
+    def __init__(self, stop_callback: Union[Callable, None] = None) -> None:
         self.callback_generator = None          # type: Optional[GeneratorTypes]
         self.running = False
+        self.stop_callback = stop_callback
         self._device = ffi.new("ma_device *")
 
     def __del__(self) -> None:
@@ -1297,14 +1312,13 @@ class AbstractDevice:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def start(self, callback_generator: GeneratorTypes, stop_callback: Union[Callable, None] = None) -> None:
+    def start(self, callback_generator: GeneratorTypes) -> None:
         """Start playback or capture, using the given callback generator (should already been started)"""
         if self.callback_generator:
             raise MiniaudioError("can't start an already started device")
         if not inspect.isgenerator(callback_generator):
             raise TypeError("callback must be a generator", type(callback_generator))
         self.callback_generator = callback_generator
-        self.stop_callback = stop_callback
         result = lib.ma_device_start(self._device)
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to start audio device", result)
@@ -1312,8 +1326,6 @@ class AbstractDevice:
 
     def stop(self) -> None:
         """Halt playback or capture."""
-        # Don't trigger the stop callback when stopped normally.
-        self.stop_callback = None
         self.callback_generator = None
         if self.running:
             result = lib.ma_device_stop(self._device)
@@ -1333,9 +1345,10 @@ class AbstractDevice:
         if self._device is not None:
             lib.ma_device_uninit(self._device)
             self._device = None
+        self.stop_callback = None
 
     def _stop_callback(self, device: ffi.CData) -> None:
-        """Stop callback is trigger when unexpectedly stopped (i.e. device disconnect)"""
+        """Called when the device is stopped (i.e. device disconnect or manual stop)"""
         if self.stop_callback:
             self.running = False
             self.stop_callback()
@@ -1370,8 +1383,9 @@ class CaptureDevice(AbstractDevice):
     def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
-        super().__init__()
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
+                 stop_callback: Union[Callable, None] = None) -> None:
+        super().__init__(stop_callback)
         self.format = input_format
         self.sample_width = _width_from_format(input_format)
         self.nchannels = nchannels
@@ -1398,12 +1412,11 @@ class CaptureDevice(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: CaptureCallbackGeneratorType,       # type: ignore
-              stop_callback: Union[Callable, None] = None) -> None:
+    def start(self, callback_generator: CaptureCallbackGeneratorType) -> None:      # type: ignore
         """Start the audio device: capture (recording) begins.
         The recorded audio data is sent to the given callback generator as raw bytes.
         (it should already be started before)"""
-        return super().start(callback_generator, stop_callback)
+        return super().start(callback_generator)
 
     def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         if self.callback_generator:
@@ -1425,8 +1438,9 @@ class PlaybackDevice(AbstractDevice):
     def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
-        super().__init__()
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
+                 stop_callback: Union[Callable, None] = None) -> None:
+        super().__init__(stop_callback)
         self.format = output_format
         self.sample_width = _width_from_format(output_format)
         self.nchannels = nchannels
@@ -1454,13 +1468,12 @@ class PlaybackDevice(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: PlaybackCallbackGeneratorType,      # type: ignore
-              stop_callback: Union[Callable, None] = None) -> None:
+    def start(self, callback_generator: PlaybackCallbackGeneratorType) -> None:     # type: ignore
         """Start the audio device: playback begins. The audio data is provided by the given callback generator.
         The generator gets sent the required number of frames and should yield the sample data
         as raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
         The generator should already be started before passing it in."""
-        return super().start(callback_generator, stop_callback)
+        return super().start(callback_generator)
 
     def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         if self.callback_generator:
@@ -1487,8 +1500,9 @@ class DuplexStream(AbstractDevice):
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
-        super().__init__()
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
+                 stop_callback: Union[Callable, None] = None) -> None:
+        super().__init__(stop_callback)
         self.capture_format = capture_format
         self.playback_format = playback_format
         self.sample_width = _width_from_format(capture_format)
@@ -1520,13 +1534,12 @@ class DuplexStream(AbstractDevice):
                 raise MiniaudioError("no suitable audio backend found")
         self.backend = ffi.string(lib.ma_get_backend_name(self._device.pContext.backend)).decode()
 
-    def start(self, callback_generator: DuplexCallbackGeneratorType,        # type: ignore
-              stop_callback: Union[Callable, None] = None) -> None:
+    def start(self, callback_generator: DuplexCallbackGeneratorType) -> None:       # type: ignore
         """Start the audio device: playback and capture begin.
         The audio data for playback is provided by the given callback generator, which is sent the
         recorded audio data at the same time.
         (it should already be started before passing it in)"""
-        return super().start(callback_generator, stop_callback)
+        return super().start(callback_generator)
 
     def _data_callback(self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int) -> None:
         buffer_size = self.sample_width * self.capture_channels * framecount
