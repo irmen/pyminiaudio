@@ -312,7 +312,7 @@ typedef int ma_result;
 #define MA_NOT_DIRECTORY                               -14
 #define MA_IS_DIRECTORY                                -15
 #define MA_DIRECTORY_NOT_EMPTY                         -16
-#define MA_END_OF_FILE                                 -17
+#define MA_AT_END                                      -17
 #define MA_NO_SPACE                                    -18
 #define MA_BUSY                                        -19
 #define MA_IO_ERROR                                    -20
@@ -348,7 +348,6 @@ typedef int ma_result;
 #define MA_IN_PROGRESS                                 -50
 #define MA_CANCELLED                                   -51
 #define MA_MEMORY_ALREADY_MAPPED                       -52
-#define MA_AT_END                                      -53
 
 /* General miniaudio-specific errors. */
 #define MA_FORMAT_NOT_SUPPORTED                        -100
@@ -358,6 +357,7 @@ typedef int ma_result;
 #define MA_NO_DEVICE                                   -104
 #define MA_API_NOT_FOUND                               -105
 #define MA_INVALID_DEVICE_CONFIG                       -106
+#define MA_LOOP                                        -107
 
 /* State errors. */
 #define MA_DEVICE_NOT_INITIALIZED                      -200
@@ -501,8 +501,8 @@ typedef struct ma_decoder ma_decoder;
 typedef void (* ma_device_callback_proc)(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 typedef void (* ma_stop_proc)(ma_device* pDevice);
 typedef void (* ma_log_proc)(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message);
-typedef size_t    (* ma_decoder_read_proc)                    (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead); /* Returns the number of bytes read. */
-typedef ma_bool32 (* ma_decoder_seek_proc)                    (ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
+typedef size_t    (* ma_decoder_read_proc) (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead); /* Returns the number of bytes read. */
+typedef ma_bool32 (* ma_decoder_seek_proc) (ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
 
 
 struct ma_device {
@@ -697,14 +697,12 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_result ma_decoder_init_flac(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_raw(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
 
     ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_flac(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_memory_raw(const void* pData, size_t dataSize, const ma_decoder_config* pConfigIn, const ma_decoder_config* pConfigOut, ma_decoder* pDecoder);
 
     ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
     ma_result ma_decoder_init_file_wav(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
@@ -779,7 +777,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     
     /* decoder read and seek callbacks */
     extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
-    extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, int byteOffset, ma_seek_origin origin);
+    extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
 """
 
 # TODO: expose and support filter API,  expose and support waveform and noise generation APIs.
