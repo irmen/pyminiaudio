@@ -6,12 +6,8 @@ import sys
 import miniaudio
 
 
-def device_stop_callback() -> None:
-    print("\nPlayback device stopped!")
-
-
 def stream_end_callback() -> None:
-    print("\nSource stream ended! (device may still be running)")
+    print("\nSource stream ended!")
 
 
 def stream_progress_callback(framecount: int) -> None:
@@ -24,7 +20,8 @@ if __name__ == "__main__":
     filestream = miniaudio.stream_file(sys.argv[1])
     callbacks_stream = miniaudio.stream_with_callbacks(filestream, stream_progress_callback, stream_end_callback)
     next(callbacks_stream)  # start the generator
-    with miniaudio.PlaybackDevice(stop_callback=device_stop_callback) as device:
+    with miniaudio.PlaybackDevice() as device:
         print("playback in background. press enter to exit:\n")
         device.start(callbacks_stream)
         input()
+    print("Device playback stopped.")

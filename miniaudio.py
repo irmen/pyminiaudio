@@ -1297,10 +1297,10 @@ def _internal_stop_callback(device: ffi.CData) -> None:
 
 
 class AbstractDevice:
-    def __init__(self, stop_callback: Union[Callable, None] = None) -> None:
+    def __init__(self) -> None:
         self.callback_generator = None          # type: Optional[GeneratorTypes]
         self.running = False
-        self.stop_callback = stop_callback
+        self.stop_callback = None               # doesn't work consistently
         self._device = ffi.new("ma_device *")
 
     def __del__(self) -> None:
@@ -1348,7 +1348,7 @@ class AbstractDevice:
         self.stop_callback = None
 
     def _stop_callback(self, device: ffi.CData) -> None:
-        """Called when the device is stopped (i.e. device disconnect or manual stop)"""
+        """Called when the device is stopped (i.e. device disconnect or manual stop) Doesn't work consistently however."""
         if self.stop_callback:
             self.running = False
             self.stop_callback()
@@ -1383,9 +1383,8 @@ class CaptureDevice(AbstractDevice):
     def __init__(self, input_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
-                 stop_callback: Union[Callable, None] = None) -> None:
-        super().__init__(stop_callback)
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
+        super().__init__()
         self.format = input_format
         self.sample_width = _width_from_format(input_format)
         self.nchannels = nchannels
@@ -1438,9 +1437,8 @@ class PlaybackDevice(AbstractDevice):
     def __init__(self, output_format: SampleFormat = SampleFormat.SIGNED16, nchannels: int = 2,
                  sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
-                 stop_callback: Union[Callable, None] = None) -> None:
-        super().__init__(stop_callback)
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
+        super().__init__()
         self.format = output_format
         self.sample_width = _width_from_format(output_format)
         self.nchannels = nchannels
@@ -1500,9 +1498,8 @@ class DuplexStream(AbstractDevice):
                  capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200,
                  playback_device_id: Union[ffi.CData, None] = None, capture_device_id: Union[ffi.CData, None] = None,
                  callback_periods: int = 0, backends: Optional[List[Backend]] = None,
-                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "",
-                 stop_callback: Union[Callable, None] = None) -> None:
-        super().__init__(stop_callback)
+                 thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
+        super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
         self.sample_width = _width_from_format(capture_format)

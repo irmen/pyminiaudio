@@ -13,66 +13,70 @@ def test_devices():
     devs.get_captures()
 
 
-def test_stop_callback_capture(backends):
-    stop_callback = mock.Mock()
-
-    try:
-        capture = miniaudio.CaptureDevice(backends=backends, stop_callback=stop_callback)
-    except miniaudio.MiniaudioError as me:
-        if me.args[0] != "failed to init device":
-            raise
-        else:
-            print("SKIPPING CAPTURE DEVICE INIT ERROR", me)
-    else:
-        gen = dummy_generator()
-        next(gen)
-        capture.start(gen)
-
-        assert capture.running is True
-        # Simulate an unexpected stop.
-        miniaudio.lib.ma_device_stop(capture._device)
-
-        stop_callback.assert_called_once()
-        assert capture.running is False
-
-
-def test_stop_callback_playback(backends):
-    stop_callback = mock.Mock()
-
-    playback = miniaudio.PlaybackDevice(backends=backends, stop_callback=stop_callback)
-    gen = dummy_generator()
-    next(gen)
-    playback.start(gen)
-
-    assert playback.running is True
-    # Simulate an unexpected stop.
-    miniaudio.lib.ma_device_stop(playback._device)
-
-    stop_callback.assert_called_once()
-    assert playback.running is False
-
-
-def test_stop_callback_duplex(backends):
-    stop_callback = mock.Mock()
-
-    try:
-        duplex = miniaudio.DuplexStream(backends=backends, stop_callback=stop_callback)
-    except miniaudio.MiniaudioError as me:
-        if me.args[0] != "failed to init device":
-            raise
-        else:
-            print("SKIPPING DUPLEX DEVICE INIT ERROR", me)
-    else:
-        gen = dummy_generator()
-        next(gen)
-        duplex.start(gen)
-
-        assert duplex.running is True
-        # Simulate an unexpected stop.
-        miniaudio.lib.ma_device_stop(duplex._device)
-
-        stop_callback.assert_called_once()
-        assert duplex.running is False
+# The device stop callback doesn't work consistently,
+# so for now I've decided to not provide this functionality any longer.
+# Also see https://github.com/mackron/miniaudio/issues/341#issuecomment-879716338
+#
+# def test_stop_callback_capture(backends):
+#     stop_callback = mock.Mock()
+#
+#     try:
+#         capture = miniaudio.CaptureDevice(backends=backends, stop_callback=stop_callback)
+#     except miniaudio.MiniaudioError as me:
+#         if me.args[0] != "failed to init device":
+#             raise
+#         else:
+#             print("SKIPPING CAPTURE DEVICE INIT ERROR", me)
+#     else:
+#         gen = dummy_generator()
+#         next(gen)
+#         capture.start(gen)
+#
+#         assert capture.running is True
+#         # Simulate an unexpected stop.
+#         miniaudio.lib.ma_device_stop(capture._device)
+#
+#         stop_callback.assert_called_once()
+#         assert capture.running is False
+#
+#
+# def test_stop_callback_playback(backends):
+#     stop_callback = mock.Mock()
+#
+#     playback = miniaudio.PlaybackDevice(backends=backends, stop_callback=stop_callback)
+#     gen = dummy_generator()
+#     next(gen)
+#     playback.start(gen)
+#
+#     assert playback.running is True
+#     # Simulate an unexpected stop.
+#     miniaudio.lib.ma_device_stop(playback._device)
+#
+#     stop_callback.assert_called_once()
+#     assert playback.running is False
+#
+#
+# def test_stop_callback_duplex(backends):
+#     stop_callback = mock.Mock()
+#
+#     try:
+#         duplex = miniaudio.DuplexStream(backends=backends, stop_callback=stop_callback)
+#     except miniaudio.MiniaudioError as me:
+#         if me.args[0] != "failed to init device":
+#             raise
+#         else:
+#             print("SKIPPING DUPLEX DEVICE INIT ERROR", me)
+#     else:
+#         gen = dummy_generator()
+#         next(gen)
+#         duplex.start(gen)
+#
+#         assert duplex.running is True
+#         # Simulate an unexpected stop.
+#         miniaudio.lib.ma_device_stop(duplex._device)
+#
+#         stop_callback.assert_called_once()
+#         assert duplex.running is False
 
 
 def test_cffi_api_calls_parameters_correct():
