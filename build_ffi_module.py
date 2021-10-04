@@ -791,9 +791,8 @@ compiler_args = ["-g1", "-O3", "-ffast-math"]
 libraries = ["m", "pthread", "dl"] if os.name == "posix" else []
 
 # determine appropriate compiler tuning options
-if platform.system() == "Darwin" and platform.machine() == "arm64":
-    # Apple Silicon
-    compiler_args += ["-mtune=apple-latest", "-march=apple-latest"]
+if platform.system() == "Darwin":
+    compiler_args += []         # apple compiler doesn't seem to like any tune/cpu options
 elif "ppc64" in platform.system():
     compiler_args += ["-mcpu=native"]
 else:
