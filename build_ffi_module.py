@@ -819,7 +819,8 @@ ffibuilder.set_source("_miniaudio", """
                       libraries=libraries,
                       extra_compile_args=compiler_args,
                       define_macros=[
-                          ("MA_NO_GENERATION", "1")
+                          ("MA_NO_GENERATION", "1"),
+                          ("MA_NO_ENCODING", "1")
                       ]
                     )
 
