@@ -786,17 +786,20 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
 ffibuilder = FFI()
 ffibuilder.cdef(vorbis_defs + miniaudio_defs)
 
+compiler_args = []
+libraries = []
 
-compiler_args = ["-g1", "-O3", "-ffast-math"]
-libraries = ["m", "pthread", "dl"] if os.name == "posix" else []
+if os.name == "posix":
+    compiler_args = ["-g1", "-O3", "-ffast-math"]
+    libraries = ["m", "pthread", "dl"]
 
-# determine appropriate compiler tuning options
-if platform.system() == "Darwin":
-    compiler_args += []         # apple compiler doesn't seem to like any tune/cpu options
-elif "ppc64" in platform.system():
-    compiler_args += ["-mcpu=native"]
-else:
-    compiler_args += ["-mtune=native", "-march=native"]
+    # determine appropriate compiler tuning options
+    if platform.system() == "Darwin":
+        compiler_args += []         # apple compiler doesn't seem to like any tune/cpu options
+    elif "ppc64" in platform.system():
+        compiler_args += ["-mcpu=native"]
+    else:
+        compiler_args += ["-mtune=native", "-march=native"]
 
 
 ffibuilder.set_source("_miniaudio", """
