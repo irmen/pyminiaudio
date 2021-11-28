@@ -967,13 +967,19 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
         with ffi.new("int8_t[]", allocated_buffer_frames * nchannels * sample_width) as decodebuffer:
             buf_ptr = ffi.cast("void *", decodebuffer)
             want_frames = (yield samples_proto) or frames_to_read
+            source = ffi.from_handle(decoder.pUserData)   # type: StreamableSource
             while True:
                 if want_frames > allocated_buffer_frames:
                     raise MiniaudioError("wanted to read more frames than storage was allocated for ({} vs {})"
                                          .format(want_frames, allocated_buffer_frames))
-                num_frames = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames)
+                try:
+                    num_frames = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames)
+                except Exception as x:
+                    raise DecodeError("error in ma_decoder_read_pcm_frames") from x
                 if num_frames <= 0:
                     break
+                if source.error_in_readcallback:
+                    raise DecodeError("error in read callback") from source.error_in_readcallback
                 buffer = ffi.buffer(decodebuffer, num_frames * sample_width * nchannels)
                 samples = array.array(samples_proto.typecode)
                 samples.frombytes(buffer)
@@ -1037,7 +1043,8 @@ def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED
 
 class StreamableSource(abc.ABC):
     """Base class for streams of audio data bytes. Can be used as a contextmanager, to properly call close()."""
-    ffi_handle = ffi.NULL       # can be set later
+    ffi_handle = ffi.NULL               # can be set later
+    error_in_readcallback = None        # type: Exception
 
     @abc.abstractmethod
     def read(self, num_bytes: int) -> Union[bytes, memoryview]:
@@ -1237,10 +1244,15 @@ def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
 def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int) -> int:
     if num_bytes <= 0 or not decoder.pUserData:
         return 0
-    source = ffi.from_handle(decoder.pUserData)
-    data = source.read(num_bytes)
-    ffi.memmove(output, data, len(data))
-    return len(data)
+    source = ffi.from_handle(decoder.pUserData)   # type: StreamableSource
+    if source.error_in_readcallback is None:
+        try:
+            data = source.read(num_bytes)
+            ffi.memmove(output, data, len(data))
+            return len(data)
+        except Exception as x:
+            source.error_in_readcallback = x
+    return 0
 
 
 @ffi.def_extern()
