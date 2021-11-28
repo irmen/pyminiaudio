@@ -1,6 +1,6 @@
 /*
 Audio playback and capture library. Choice of public domain or MIT-0. See license statements at the end of this file.
-miniaudio - v0.10.42 - 2021-08-22
+miniaudio - v0.10.43 - TBD
 
 David Reid - mackron@gmail.com
 
@@ -1498,7 +1498,7 @@ extern "C" {
 
 #define MA_VERSION_MAJOR    0
 #define MA_VERSION_MINOR    10
-#define MA_VERSION_REVISION 42
+#define MA_VERSION_REVISION 43
 #define MA_VERSION_STRING   MA_XSTRINGIFY(MA_VERSION_MAJOR) "." MA_XSTRINGIFY(MA_VERSION_MINOR) "." MA_XSTRINGIFY(MA_VERSION_REVISION)
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -20392,10 +20392,11 @@ static ma_result ma_context_enumerate_devices__alsa(ma_context* pContext, ma_enu
 
         /*
         Some devices are both playback and capture, but they are only enumerated by ALSA once. We need to fire the callback
-        again for the other device type in this case. We do this for known devices.
+        again for the other device type in this case. We do this for known devices and where the IOID hint is NULL, which
+        means both Input and Output.
         */
         if (cbResult) {
-            if (ma_is_common_device_name__alsa(NAME)) {
+            if (ma_is_common_device_name__alsa(NAME) || IOID == NULL) {
                 if (deviceType == ma_device_type_playback) {
                     if (!ma_is_capture_device_blacklisted__alsa(NAME)) {
                         cbResult = callback(pContext, ma_device_type_capture, &deviceInfo, pUserData);
@@ -21213,7 +21214,7 @@ static ma_result ma_device_wait_write__alsa(ma_device* pDevice)
 
 static ma_result ma_device_read__alsa(ma_device* pDevice, void* pFramesOut, ma_uint32 frameCount, ma_uint32* pFramesRead)
 {
-    ma_snd_pcm_sframes_t resultALSA;
+    ma_snd_pcm_sframes_t resultALSA = 0;
 
     MA_ASSERT(pDevice != NULL);
     MA_ASSERT(pFramesOut != NULL);
@@ -21267,7 +21268,7 @@ static ma_result ma_device_read__alsa(ma_device* pDevice, void* pFramesOut, ma_u
 
 static ma_result ma_device_write__alsa(ma_device* pDevice, const void* pFrames, ma_uint32 frameCount, ma_uint32* pFramesWritten)
 {
-    ma_snd_pcm_sframes_t resultALSA;
+    ma_snd_pcm_sframes_t resultALSA = 0;
 
     MA_ASSERT(pDevice != NULL);
     MA_ASSERT(pFrames != NULL);
@@ -32299,7 +32300,7 @@ static ma_result ma_device_init_by_type__webaudio(ma_device* pDevice, const ma_d
         var isCapture  = $3;
         var pDevice    = $4;
 
-        if (typeof(miniaudio) === 'undefined') {
+        if (typeof(window.miniaudio) === 'undefined') {
             return -1;  /* Context not initialized. */
         }
 
@@ -32596,8 +32597,8 @@ static ma_result ma_context_init__webaudio(ma_context* pContext, const ma_contex
             return 0;   /* Web Audio not supported. */
         }
 
-        if (typeof(miniaudio) === 'undefined') {
-            miniaudio = {};
+        if (typeof(window.miniaudio) === 'undefined') {
+            window.miniaudio = {};
             miniaudio.devices = [];   /* Device cache for mapping devices to indexes for JavaScript/C interop. */
 
             miniaudio.track_device = function(device) {
@@ -69439,6 +69440,11 @@ The following miscellaneous changes have also been made.
 /*
 REVISION HISTORY
 ================
+v0.10.43 - TBD
+  - ALSA: Fix use of uninitialized variables
+  - ALSA: Fix enumeration of devices that support both playback and capture.
+  - WebAudio: Fix errors in strict mode.
+
 v0.10.42 - 2021-08-22
   - Fix a possible deadlock when stopping devices.
 
