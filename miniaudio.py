@@ -978,9 +978,7 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
                     raise DecodeError("error in ma_decoder_read_pcm_frames") from x
                 if num_frames <= 0:
                     break
-                if isinstance(source.error_in_readcallback, KeyboardInterrupt):
-                    raise source.error_in_readcallback
-                elif source.error_in_readcallback:
+                if source.error_in_readcallback:
                     raise DecodeError("error in read callback") from source.error_in_readcallback
                 buffer = ffi.buffer(decodebuffer, num_frames * sample_width * nchannels)
                 samples = array.array(samples_proto.typecode)
@@ -1252,7 +1250,7 @@ def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_b
             data = source.read(num_bytes)
             ffi.memmove(output, data, len(data))
             return len(data)
-        except (Exception, KeyboardInterrupt) as x:
+        except Exception as x:
             source.error_in_readcallback = x
     return 0
 
