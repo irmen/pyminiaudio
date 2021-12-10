@@ -967,7 +967,9 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
         with ffi.new("int8_t[]", allocated_buffer_frames * nchannels * sample_width) as decodebuffer:
             buf_ptr = ffi.cast("void *", decodebuffer)
             want_frames = (yield samples_proto) or frames_to_read
-            source = ffi.from_handle(decoder.pUserData)   # type: StreamableSource
+            source = None     # type: Optional[StreamableSource]
+            if decoder.pUserData != ffi.NULL:
+                source = ffi.from_handle(decoder.pUserData)
             while True:
                 if want_frames > allocated_buffer_frames:
                     raise MiniaudioError("wanted to read more frames than storage was allocated for ({} vs {})"
@@ -978,7 +980,7 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
                     raise DecodeError("error in ma_decoder_read_pcm_frames") from x
                 if num_frames <= 0:
                     break
-                if source.error_in_readcallback:
+                if source and source.error_in_readcallback:
                     raise DecodeError("error in read callback") from source.error_in_readcallback
                 buffer = ffi.buffer(decodebuffer, num_frames * sample_width * nchannels)
                 samples = array.array(samples_proto.typecode)
