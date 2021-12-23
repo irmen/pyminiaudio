@@ -6,6 +6,9 @@
 Multiplatform audio playback, recording, decoding and sample format conversion for
 Linux (including Raspberri Pi), Windows, Mac and probably other systems such as BSD.
 
+Installation for most users: via [Pypi](https://pypi.org/project/miniaudio/), Raspberri Pi builds via [PiWheels](https://www.piwheels.org/project/miniaudio/).
+
+
 This module provides:
 
 - playback, recording and sound conversion, handled by the embedded cross-platform [miniaudio](https://github.com/dr-soft/miniaudio/) library
