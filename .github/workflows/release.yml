@@ -1,11 +1,10 @@
 name: Build and upload to PyPI
 
-# Build on every published release
 on:
   release:
     types:
       - published
-
+  workflow_dispatch:
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
@@ -13,7 +12,6 @@ jobs:
     strategy:
       matrix:
         # Need to be PIP517 build in order to avoid setuptools bug - https://github.com/pypa/cibuildwheel/issues/813
-        # I dunno enough about the work involved in that - sorry!
         # os: [ubuntu-latest, windows-latest, macos-11, macos-latest]
           os: [ubuntu-latest, windows-latest]
 
@@ -28,10 +26,11 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.3.1
         env:
-        # I can't get windows tests to work, but at least here's linux testing the built wheels
-          CIBW_BEFORE_TEST_LINUX: mkdir -p ~/examples/samples && cp -R {project}/examples/samples/* ~/examples/samples/
+
+          CIBW_ENVIRONMENT_LINUX: TEST_SAMPLE_PATH='{project}/examples/samples/'
+          CIBW_ENVIRONMENT_WINDOWS: TEST_SAMPLE_PATH='{project}\examples\samples\' 
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND_LINUX: "pytest {project}/tests"
+          CIBW_TEST_COMMAND: "pytest {project}/tests"
 
 
       - uses: actions/upload-artifact@v2
@@ -59,9 +58,9 @@ jobs:
           path: dist/*.tar.gz
 
   upload_pypi:
-    name: Upload to PyPi
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - uses: actions/download-artifact@v2
         with:
@@ -72,4 +71,3 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.PYPI_TEST_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
