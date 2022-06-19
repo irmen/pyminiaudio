@@ -12,7 +12,7 @@
       <excludeFolder url="file://$MODULE_DIR$/miniaudio.egg-info" />
       <excludeFolder url="file://$MODULE_DIR$/.pytest_cache" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (py3)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (py3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

@@ -89,6 +89,8 @@ stb_vorbis_info stb_vorbis_get_info(stb_vorbis *f);
 stb_vorbis_comment stb_vorbis_get_comment(stb_vorbis *f);
 int stb_vorbis_get_error(stb_vorbis *f);
 void stb_vorbis_close(stb_vorbis *f);
+int stb_vorbis_get_sample_offset(stb_vorbis *f);
+unsigned int stb_vorbis_get_file_offset(stb_vorbis *f);
 
 int stb_vorbis_decode_filename(const char *filename, int *channels, int *sample_rate, short **output);
 int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
@@ -104,9 +106,11 @@ unsigned int stb_vorbis_stream_length_in_samples(stb_vorbis *f);
 float        stb_vorbis_stream_length_in_seconds(stb_vorbis *f);
 
 int stb_vorbis_get_frame_short_interleaved(stb_vorbis *f, int num_c, short *buffer, int num_shorts);
+int stb_vorbis_get_frame_short            (stb_vorbis *f, int num_c, short **buffer, int num_samples);
 int stb_vorbis_get_samples_float_interleaved(stb_vorbis *f, int channels, float *buffer, int num_floats);
+int stb_vorbis_get_samples_float(stb_vorbis *f, int channels, float **buffer, int num_samples);
 int stb_vorbis_get_samples_short_interleaved(stb_vorbis *f, int channels, short *buffer, int num_shorts);
-
+int stb_vorbis_get_samples_short(stb_vorbis *f, int channels, short **buffer, int num_samples);
 
 """
 
@@ -292,90 +296,88 @@ drwav_int32* drwav_open_memory_and_read_pcm_frames_s32(const void* data, size_t 
 
 
 
+typedef enum
+{
+    MA_SUCCESS                        =  0,
+    MA_ERROR                          = -1,  /* A generic error. */
+    MA_INVALID_ARGS                   = -2,
+    MA_INVALID_OPERATION              = -3,
+    MA_OUT_OF_MEMORY                  = -4,
+    MA_OUT_OF_RANGE                   = -5,
+    MA_ACCESS_DENIED                  = -6,
+    MA_DOES_NOT_EXIST                 = -7,
+    MA_ALREADY_EXISTS                 = -8,
+    MA_TOO_MANY_OPEN_FILES            = -9,
+    MA_INVALID_FILE                   = -10,
+    MA_TOO_BIG                        = -11,
+    MA_PATH_TOO_LONG                  = -12,
+    MA_NAME_TOO_LONG                  = -13,
+    MA_NOT_DIRECTORY                  = -14,
+    MA_IS_DIRECTORY                   = -15,
+    MA_DIRECTORY_NOT_EMPTY            = -16,
+    MA_AT_END                         = -17,
+    MA_NO_SPACE                       = -18,
+    MA_BUSY                           = -19,
+    MA_IO_ERROR                       = -20,
+    MA_INTERRUPT                      = -21,
+    MA_UNAVAILABLE                    = -22,
+    MA_ALREADY_IN_USE                 = -23,
+    MA_BAD_ADDRESS                    = -24,
+    MA_BAD_SEEK                       = -25,
+    MA_BAD_PIPE                       = -26,
+    MA_DEADLOCK                       = -27,
+    MA_TOO_MANY_LINKS                 = -28,
+    MA_NOT_IMPLEMENTED                = -29,
+    MA_NO_MESSAGE                     = -30,
+    MA_BAD_MESSAGE                    = -31,
+    MA_NO_DATA_AVAILABLE              = -32,
+    MA_INVALID_DATA                   = -33,
+    MA_TIMEOUT                        = -34,
+    MA_NO_NETWORK                     = -35,
+    MA_NOT_UNIQUE                     = -36,
+    MA_NOT_SOCKET                     = -37,
+    MA_NO_ADDRESS                     = -38,
+    MA_BAD_PROTOCOL                   = -39,
+    MA_PROTOCOL_UNAVAILABLE           = -40,
+    MA_PROTOCOL_NOT_SUPPORTED         = -41,
+    MA_PROTOCOL_FAMILY_NOT_SUPPORTED  = -42,
+    MA_ADDRESS_FAMILY_NOT_SUPPORTED   = -43,
+    MA_SOCKET_NOT_SUPPORTED           = -44,
+    MA_CONNECTION_RESET               = -45,
+    MA_ALREADY_CONNECTED              = -46,
+    MA_NOT_CONNECTED                  = -47,
+    MA_CONNECTION_REFUSED             = -48,
+    MA_NO_HOST                        = -49,
+    MA_IN_PROGRESS                    = -50,
+    MA_CANCELLED                      = -51,
+    MA_MEMORY_ALREADY_MAPPED          = -52,
 
-typedef int ma_result;
-/* General errors. */
-#define MA_SUCCESS                                      0
-#define MA_ERROR                                       -1   /* A generic error. */
-#define MA_INVALID_ARGS                                -2
-#define MA_INVALID_OPERATION                           -3
-#define MA_OUT_OF_MEMORY                               -4
-#define MA_OUT_OF_RANGE                                -5
-#define MA_ACCESS_DENIED                               -6
-#define MA_DOES_NOT_EXIST                              -7
-#define MA_ALREADY_EXISTS                              -8
-#define MA_TOO_MANY_OPEN_FILES                         -9
-#define MA_INVALID_FILE                                -10
-#define MA_TOO_BIG                                     -11
-#define MA_PATH_TOO_LONG                               -12
-#define MA_NAME_TOO_LONG                               -13
-#define MA_NOT_DIRECTORY                               -14
-#define MA_IS_DIRECTORY                                -15
-#define MA_DIRECTORY_NOT_EMPTY                         -16
-#define MA_AT_END                                      -17
-#define MA_NO_SPACE                                    -18
-#define MA_BUSY                                        -19
-#define MA_IO_ERROR                                    -20
-#define MA_INTERRUPT                                   -21
-#define MA_UNAVAILABLE                                 -22
-#define MA_ALREADY_IN_USE                              -23
-#define MA_BAD_ADDRESS                                 -24
-#define MA_BAD_SEEK                                    -25
-#define MA_BAD_PIPE                                    -26
-#define MA_DEADLOCK                                    -27
-#define MA_TOO_MANY_LINKS                              -28
-#define MA_NOT_IMPLEMENTED                             -29
-#define MA_NO_MESSAGE                                  -30
-#define MA_BAD_MESSAGE                                 -31
-#define MA_NO_DATA_AVAILABLE                           -32
-#define MA_INVALID_DATA                                -33
-#define MA_TIMEOUT                                     -34
-#define MA_NO_NETWORK                                  -35
-#define MA_NOT_UNIQUE                                  -36
-#define MA_NOT_SOCKET                                  -37
-#define MA_NO_ADDRESS                                  -38
-#define MA_BAD_PROTOCOL                                -39
-#define MA_PROTOCOL_UNAVAILABLE                        -40
-#define MA_PROTOCOL_NOT_SUPPORTED                      -41
-#define MA_PROTOCOL_FAMILY_NOT_SUPPORTED               -42
-#define MA_ADDRESS_FAMILY_NOT_SUPPORTED                -43
-#define MA_SOCKET_NOT_SUPPORTED                        -44
-#define MA_CONNECTION_RESET                            -45
-#define MA_ALREADY_CONNECTED                           -46
-#define MA_NOT_CONNECTED                               -47
-#define MA_CONNECTION_REFUSED                          -48
-#define MA_NO_HOST                                     -49
-#define MA_IN_PROGRESS                                 -50
-#define MA_CANCELLED                                   -51
-#define MA_MEMORY_ALREADY_MAPPED                       -52
+    /* General miniaudio-specific errors. */
+    MA_FORMAT_NOT_SUPPORTED           = -100,
+    MA_DEVICE_TYPE_NOT_SUPPORTED      = -101,
+    MA_SHARE_MODE_NOT_SUPPORTED       = -102,
+    MA_NO_BACKEND                     = -103,
+    MA_NO_DEVICE                      = -104,
+    MA_API_NOT_FOUND                  = -105,
+    MA_INVALID_DEVICE_CONFIG          = -106,
+    MA_LOOP                           = -107,
 
-/* General miniaudio-specific errors. */
-#define MA_FORMAT_NOT_SUPPORTED                        -100
-#define MA_DEVICE_TYPE_NOT_SUPPORTED                   -101
-#define MA_SHARE_MODE_NOT_SUPPORTED                    -102
-#define MA_NO_BACKEND                                  -103
-#define MA_NO_DEVICE                                   -104
-#define MA_API_NOT_FOUND                               -105
-#define MA_INVALID_DEVICE_CONFIG                       -106
-#define MA_LOOP                                        -107
+    /* State errors. */
+    MA_DEVICE_NOT_INITIALIZED         = -200,
+    MA_DEVICE_ALREADY_INITIALIZED     = -201,
+    MA_DEVICE_NOT_STARTED             = -202,
+    MA_DEVICE_NOT_STOPPED             = -203,
 
-/* State errors. */
-#define MA_DEVICE_NOT_INITIALIZED                      -200
-#define MA_DEVICE_ALREADY_INITIALIZED                  -201
-#define MA_DEVICE_NOT_STARTED                          -202
-#define MA_DEVICE_NOT_STOPPED                          -203
-
-/* Operation errors. */
-#define MA_FAILED_TO_INIT_BACKEND                      -300
-#define MA_FAILED_TO_OPEN_BACKEND_DEVICE               -301
-#define MA_FAILED_TO_START_BACKEND_DEVICE              -302
-#define MA_FAILED_TO_STOP_BACKEND_DEVICE               -303
+    /* Operation errors. */
+    MA_FAILED_TO_INIT_BACKEND         = -300,
+    MA_FAILED_TO_OPEN_BACKEND_DEVICE  = -301,
+    MA_FAILED_TO_START_BACKEND_DEVICE = -302,
+    MA_FAILED_TO_STOP_BACKEND_DEVICE  = -303
+} ma_result; 
 
 
 #define MA_MIN_CHANNELS                                1
-#define MA_MAX_CHANNELS                                32
-#define MA_MIN_SAMPLE_RATE                             8000
-#define MA_MAX_SAMPLE_RATE                             384000
+#define MA_MAX_CHANNELS                                254
 
 
 typedef enum
@@ -393,8 +395,8 @@ typedef enum
     ma_backend_aaudio,
     ma_backend_opensl,
     ma_backend_webaudio,
-    ma_backend_custom,
-    ma_backend_null    /* <-- Must always be the last item. Lowest priority, and used as the terminator for backend enumeration. */
+    ma_backend_custom,  /* <-- Custom backend, with callbacks defined by the context config. */
+    ma_backend_null     /* <-- Must always be the last item. Lowest priority, and used as the terminator for backend enumeration. */
 } ma_backend;
 
 typedef   signed char           ma_int8;
@@ -417,12 +419,13 @@ typedef enum
     ma_dither_mode_triangle
 } ma_dither_mode;
 
+
 typedef enum
 {
-    ma_format_unknown = 0,
+    ma_format_unknown = 0,     /* Mainly used for indicating an error, but also used as the default for the output format for decoders. */
     ma_format_u8      = 1,
-    ma_format_s16     = 2,
-    ma_format_s24     = 3,
+    ma_format_s16     = 2,     /* Seems to be the most widely supported format. */
+    ma_format_s24     = 3,     /* Tightly packed. 3 bytes per sample. */
     ma_format_s32     = 4,
     ma_format_f32     = 5,
     ma_format_count
@@ -434,8 +437,7 @@ typedef enum
     ma_channel_mix_mode_rectangular = 0,   /* Simple averaging based on the plane(s) the channel is sitting on. */
     ma_channel_mix_mode_simple,            /* Drop excess channels; zeroed out extra channels. */
     ma_channel_mix_mode_custom_weights,    /* Use custom weights specified in ma_channel_router_config. */
-    ma_channel_mix_mode_planar_blend = ma_channel_mix_mode_rectangular,
-    ma_channel_mix_mode_default = ma_channel_mix_mode_planar_blend
+    ma_channel_mix_mode_default = ma_channel_mix_mode_rectangular
 } ma_channel_mix_mode;
 
 typedef enum
@@ -475,10 +477,27 @@ typedef enum
 
 typedef enum
 {
+    ma_device_state_uninitialized = 0,
+    ma_device_state_stopped       = 1,  /* The device's default state after initialization. */
+    ma_device_state_started       = 2,  /* The device is started and is requesting and/or delivering audio data. */
+    ma_device_state_starting      = 3,  /* Transitioning from a stopped state to started. */
+    ma_device_state_stopping      = 4   /* Transitioning from a started state to stopped. */
+} ma_device_state;
+
+typedef enum
+{
+    ma_encoding_format_unknown = 0,
+    ma_encoding_format_wav,
+    ma_encoding_format_flac,
+    ma_encoding_format_mp3,
+    ma_encoding_format_vorbis
+} ma_encoding_format;
+
+typedef enum
+{
     ma_share_mode_shared = 0,
     ma_share_mode_exclusive
 } ma_share_mode;
-
 
 typedef enum
 {
@@ -494,15 +513,54 @@ typedef struct ma_context {
     ...;
 } ma_context;
 
+typedef struct ma_context ma_context;
+typedef struct ma_device ma_device;
+
+typedef enum
+{
+    ma_device_notification_type_started,
+    ma_device_notification_type_stopped,
+    ma_device_notification_type_rerouted,
+    ma_device_notification_type_interruption_began,
+    ma_device_notification_type_interruption_ended
+} ma_device_notification_type;
+
+typedef struct
+{
+    ma_device* pDevice;
+    ma_device_notification_type type;
+    union
+    {
+        struct
+        {
+            int _unused;
+        } started;
+        struct
+        {
+            int _unused;
+        } stopped;
+        struct
+        {
+            int _unused;
+        } rerouted;
+        struct
+        {
+            int _unused;
+        } interruption;
+    } data;
+} ma_device_notification;
+
+
 typedef ma_uint8 ma_channel;
 typedef struct ma_device ma_device;
 typedef struct ma_decoder ma_decoder;
 
-typedef void (* ma_device_callback_proc)(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
-typedef void (* ma_stop_proc)(ma_device* pDevice);
-typedef void (* ma_log_proc)(ma_context* pContext, ma_device* pDevice, ma_uint32 logLevel, const char* message);
-typedef size_t    (* ma_decoder_read_proc) (ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead); /* Returns the number of bytes read. */
-typedef ma_bool32 (* ma_decoder_seek_proc) (ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
+typedef ma_result (* ma_decoder_read_proc)(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead, size_t* pBytesRead);         /* Returns the number of bytes read. */
+typedef ma_result (* ma_decoder_seek_proc)(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
+typedef ma_result (* ma_decoder_tell_proc)(ma_decoder* pDecoder, ma_int64* pCursor);
+typedef void (* ma_device_data_proc)(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
+typedef void (* ma_stop_proc)(ma_device* pDevice);  /* DEPRECATED. Use ma_device_notification_proc instead. */
+typedef void (* ma_device_notification_proc)(const ma_device_notification* pNotification);
 
 
 struct ma_device {
@@ -510,11 +568,9 @@ struct ma_device {
     ma_context* pContext;
     ma_device_type type;
     ma_uint32 sampleRate;
-    volatile ma_uint32 state;               /* The state of the device is variable and can change at any time on any thread, so tell the compiler as such with `volatile`. */
-    ma_device_callback_proc onData;         /* Set once at initialization time and should not be changed after. */
-    ma_stop_proc onStop;                    /* Set once at initialization time and should not be changed after. */
+    volatile ma_device_state state;        /* The state of the device is variable and can change at any time on any thread. Must be used atomically. */
     void* pUserData;                        /* Application defined data. */
-    volatile float masterVolumeFactor;      /* Volatile so we can use some thread safety when applying volume to periods. */
+    volatile float masterVolumeFactor;     /* Linear 0..1. Can be read and written simultaneously by different threads. Must be used atomically. */
     ...;
     
 };
@@ -522,39 +578,41 @@ struct ma_device {
 
 typedef struct
 {
+    /* Basic info. This is the only information guaranteed to be filled in during device enumeration. */
     ma_device_id id;
     char name[256];
     ma_bool32 isDefault;
-    ma_uint32 formatCount;
-    ma_format formats[ma_format_count];
-    ma_uint32 minChannels;
-    ma_uint32 maxChannels;
-    ma_uint32 minSampleRate;
-    ma_uint32 maxSampleRate;
 
-    ...;
+    ma_uint32 nativeDataFormatCount;
+    struct
+    {
+        ma_format format;       /* Sample format. If set to ma_format_unknown, all sample formats are supported. */
+        ma_uint32 channels;     /* If set to 0, all channels are supported. */
+        ma_uint32 sampleRate;   /* If set to 0, all sample rates are supported. */
+        ma_uint32 flags;        /* A combination of MA_DATA_FORMAT_FLAG_* flags. */
+    } nativeDataFormats[64];
 } ma_device_info;
-
 
 
 typedef struct
 {
+
     ma_device_type deviceType;
     ma_uint32 sampleRate;
     ma_uint32 periodSizeInFrames;
     ma_uint32 periodSizeInMilliseconds;
     ma_uint32 periods;
-    ma_bool8 noPreZeroedOutputBuffer;   /* When set to true, the contents of the output buffer passed into the data callback will be left undefined rather than initialized to zero. */
-    ma_bool8 noClip;                    /* When set to true, the contents of the output buffer passed into the data callback will be clipped after returning. Only applies when the playback sample format is f32. */
-    ma_device_callback_proc dataCallback;
+    ma_device_data_proc dataCallback;
+    ma_device_notification_proc notificationCallback;
     ma_stop_proc stopCallback;
     void* pUserData;
+    
     struct
     {
         const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
-        ma_channel channelMap[MA_MAX_CHANNELS];
+        ma_channel* pChannelMap;
         ma_channel_mix_mode channelMixMode;
         ma_share_mode shareMode;
     } playback;
@@ -563,7 +621,7 @@ typedef struct
         const ma_device_id* pDeviceID;
         ma_format format;
         ma_uint32 channels;
-        ma_channel channelMap[MA_MAX_CHANNELS];
+        ma_channel* pChannelMap;
         ma_channel_mix_mode channelMixMode;
         ma_share_mode shareMode;
     } capture;
@@ -621,6 +679,7 @@ typedef struct
     ma_format format;      /* Set to 0 or ma_format_unknown to use the stream's internal format. */
     ma_uint32 channels;    /* Set to 0 to use the stream's internal channels. */
     ma_uint32 sampleRate;  /* Set to 0 to use the stream's internal sample rate. */
+    ma_encoding_format encodingFormat;
     ma_channel_mix_mode channelMixMode;
     ma_dither_mode ditherMode;
     ...;
@@ -647,19 +706,25 @@ typedef struct
     ma_uint32 channelsOut;
     ma_uint32 sampleRateIn;
     ma_uint32 sampleRateOut;
-    ma_channel channelMapIn[MA_MAX_CHANNELS];
-    ma_channel channelMapOut[MA_MAX_CHANNELS];
+    ma_channel* pChannelMapIn;
+    ma_channel* pChannelMapOut;
     ma_dither_mode ditherMode;
     ma_channel_mix_mode channelMixMode;
-    float channelWeights[MA_MAX_CHANNELS][MA_MAX_CHANNELS];  /* [in][out]. Only used when channelMixMode is set to ma_channel_mix_mode_custom_weights. */
-    
+    float** ppChannelWeights;  /* [in][out]. Only used when mixingMode is set to ma_channel_mix_mode_custom_weights. */
+    ma_bool32 allowDynamicSampleRate;
     ...;
 } ma_data_converter_config;
 
 
 typedef struct
 {
-    ma_data_converter_config config;
+    ma_format formatIn;
+    ma_format formatOut;
+    ma_uint32 channelsIn;
+    ma_uint32 channelsOut;
+    ma_uint32 sampleRateIn;
+    ma_uint32 sampleRateOut;
+    ma_dither_mode ditherMode;
     ...;
 } ma_data_converter;
 
@@ -680,7 +745,7 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_result ma_context_uninit(ma_context* pContext);
     ma_result ma_context_enumerate_devices(ma_context* pContext, ma_enum_devices_callback_proc callback, void* pUserData);
     ma_result ma_context_get_devices(ma_context* pContext, ma_device_info** ppPlaybackDeviceInfos, ma_uint32* pPlaybackDeviceCount, ma_device_info** ppCaptureDeviceInfos, ma_uint32* pCaptureDeviceCount);
-    ma_result ma_context_get_device_info(ma_context* pContext, ma_device_type deviceType, const ma_device_id* pDeviceID, ma_share_mode shareMode, ma_device_info* pDeviceInfo);
+    ma_result ma_context_get_device_info(ma_context* pContext, ma_device_type deviceType, const ma_device_id* pDeviceID, ma_device_info* pDeviceInfo);
     ma_result ma_device_init(ma_context* pContext, const ma_device_config* pConfig, ma_device* pDevice);
     ma_result ma_device_init_ex(const ma_backend backends[], ma_uint32 backendCount, const ma_context_config* pContextConfig, const ma_device_config* pConfig, ma_device* pDevice);
     void ma_device_uninit(ma_device* pDevice);
@@ -693,67 +758,21 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
 
     /**** decoding ****/
     ma_result ma_decoder_init(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_wav(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_flac(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_vorbis(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_mp3(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
     ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_memory_wav(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_memory_flac(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_memory_vorbis(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_memory_mp3(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
     ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_wav(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_flac(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_vorbis(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_mp3(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
     ma_result ma_decoder_init_file_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_wav_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_flac_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_vorbis_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-    ma_result ma_decoder_init_file_mp3_w(const wchar_t* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
 
     ma_result ma_decoder_uninit(ma_decoder* pDecoder);
-    ma_uint64 ma_decoder_get_length_in_pcm_frames(ma_decoder* pDecoder);
-    ma_result ma_decoder_get_available_frames(ma_decoder* pDecoder, ma_uint64* pAvailableFrames);
-    ma_uint64 ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount);
+    ma_result ma_decoder_read_pcm_frames(ma_decoder* pDecoder, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
     ma_result ma_decoder_seek_to_pcm_frame(ma_decoder* pDecoder, ma_uint64 frameIndex);
     ma_result ma_decode_file(const char* pFilePath, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
     ma_result ma_decode_memory(const void* pData, size_t dataSize, ma_decoder_config* pConfig, ma_uint64* pFrameCountOut, void** ppDataOut);
 
     /**** format conversion ****/
     void ma_pcm_convert(void* pOut, ma_format formatOut, const void* pIn, ma_format formatIn, ma_uint64 sampleCount, ma_dither_mode ditherMode);
-    void ma_deinterleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void* pInterleavedPCMFrames, void** ppDeinterleavedPCMFrames);
-    void ma_interleave_pcm_frames(ma_format format, ma_uint32 channels, ma_uint64 frameCount, const void** ppDeinterleavedPCMFrames, void* pInterleavedPCMFrames);
 
     ma_uint64 ma_convert_frames(void* pOut, ma_uint64 frameCountOut, ma_format formatOut, ma_uint32 channelsOut, ma_uint32 sampleRateOut, const void* pIn, ma_uint64 frameCountIn, ma_format formatIn, ma_uint32 channelsIn, ma_uint32 sampleRateIn);
-    ma_uint64 ma_convert_frames_ex(void* pOut, ma_uint64 frameCountOut, const void* pIn, ma_uint64 frameCountIn, const ma_data_converter_config* pConfig);
     ma_uint64 ma_calculate_frame_count_after_resampling(ma_uint32 sampleRateOut, ma_uint32 sampleRateIn, ma_uint64 frameCountIn);
-
-
-    /*** channel maps ***/
-    void ma_get_standard_channel_map(ma_standard_channel_map standardChannelMap, ma_uint32 channels, ma_channel channelMap[MA_MAX_CHANNELS]);
-    void ma_channel_map_copy(ma_channel* pOut, const ma_channel* pIn, ma_uint32 channels);
-    ma_bool32 ma_channel_map_valid(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS]);
-    ma_bool32 ma_channel_map_equal(ma_uint32 channels, const ma_channel channelMapA[MA_MAX_CHANNELS], const ma_channel channelMapB[MA_MAX_CHANNELS]);
-    ma_bool32 ma_channel_map_blank(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS]);
-    ma_bool32 ma_channel_map_contains_channel_position(ma_uint32 channels, const ma_channel channelMap[MA_MAX_CHANNELS], ma_channel channelPosition);
-
-    /*** streaming sound conversion ***/
-    ma_data_converter_config ma_data_converter_config_init_default(void);
-    ma_data_converter_config ma_data_converter_config_init(ma_format formatIn, ma_format formatOut, ma_uint32 channelsIn, ma_uint32 channelsOut, ma_uint32 sampleRateIn, ma_uint32 sampleRateOut);
-    ma_result ma_data_converter_init(const ma_data_converter_config* pConfig, ma_data_converter* pConverter);
-    void ma_data_converter_uninit(ma_data_converter* pConverter);
-    ma_result ma_data_converter_process_pcm_frames(ma_data_converter* pConverter, const void* pFramesIn, ma_uint64* pFrameCountIn, void* pFramesOut, ma_uint64* pFrameCountOut);
-    ma_result ma_data_converter_set_rate(ma_data_converter* pConverter, ma_uint32 sampleRateIn, ma_uint32 sampleRateOut);
-    ma_result ma_data_converter_set_rate_ratio(ma_data_converter* pConverter, float ratioInOut);
-    ma_uint64 ma_data_converter_get_required_input_frame_count(ma_data_converter* pConverter, ma_uint64 outputFrameCount);
-    ma_uint64 ma_data_converter_get_expected_output_frame_count(ma_data_converter* pConverter, ma_uint64 inputFrameCount);
-    ma_uint64 ma_data_converter_get_input_latency(ma_data_converter* pConverter);
-    ma_uint64 ma_data_converter_get_output_latency(ma_data_converter* pConverter);
 
 
     /**** misc ****/
@@ -764,7 +783,6 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     
     const char* ma_get_backend_name(ma_backend backend);
     const char* ma_get_format_name(ma_format format);
-    void ma_zero_pcm_frames(void* p, ma_uint32 frameCount, ma_format format, ma_uint32 channels);
     void ma_free(void* p, const ma_allocation_callbacks* pAllocationCallbacks);
 
     void init_miniaudio(void);
@@ -776,8 +794,8 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     extern "Python" void _internal_stop_callback(ma_device* pDevice);
     
     /* decoder read and seek callbacks */
-    extern "Python" size_t _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead);
-    extern "Python" ma_bool32 _internal_decoder_seek_callback(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
+    extern "Python" ma_result _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead, size_t* pBytesRead);
+    extern "Python" ma_result _internal_decoder_seek_callback(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
 """
 
 # TODO: expose and support filter API,  expose and support waveform and noise generation APIs.

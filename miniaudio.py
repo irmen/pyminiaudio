@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.46"
+__version__ = "1.50"
 
 
 import abc
@@ -30,11 +30,11 @@ lib.init_miniaudio()
 
 class FileFormat(Enum):
     """Audio file format"""
-    UNKNOWN = 0
-    WAV = 1
-    FLAC = 2
-    VORBIS = 3
-    MP3 = 4
+    UNKNOWN = lib.ma_encoding_format_unknown
+    WAV = lib.ma_encoding_format_wav
+    FLAC = lib.ma_encoding_format_flac
+    MP3 = lib.ma_encoding_format_mp3
+    VORBIS = lib.ma_encoding_format_vorbis
 
 
 class SampleFormat(Enum):
@@ -66,7 +66,6 @@ class ChannelMixMode(Enum):
     RECTANGULAR = lib.ma_channel_mix_mode_rectangular
     SIMPLE = lib.ma_channel_mix_mode_simple
     CUSTOMWEIGHTS = lib.ma_channel_mix_mode_custom_weights
-    PLANARBLEND = lib.ma_channel_mix_mode_planar_blend
     DEFAULT = lib.ma_channel_mix_mode_default
 
 
@@ -865,16 +864,18 @@ class Devices:
 
     def _get_info(self, device_type: DeviceType, device_info: ffi.CData) -> Dict[str, Any]:
         # obtain detailed info about the device
-        lib.ma_context_get_device_info(self._context, device_type.value, ffi.addressof(device_info.id),
-                                       0, ffi.addressof(device_info))
-        formats = set(device_info.formats[0:device_info.formatCount])
-        return {
-            "formats": {f: ffi.string(lib.ma_get_format_name(f)).decode() for f in formats},
-            "minChannels": device_info.minChannels,
-            "maxChannels": device_info.maxChannels,
-            "minSampleRate": device_info.minSampleRate,
-            "maxSampleRate": device_info.maxSampleRate
-        }
+        result = lib.ma_context_get_device_info(self._context, device_type.value, ffi.addressof(device_info.id), ffi.addressof(device_info))
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("can't get device info")
+        formats = []
+        for fmt in range(device_info.nativeDataFormatCount):
+            data_format = device_info.nativeDataFormats[fmt]
+            formats.append({
+                "format": ffi.string(lib.ma_get_format_name(data_format.format)).decode(),
+                "samplerate": data_format.sampleRate,
+                "channels": data_format.channels
+            })
+        return {"formats": formats}
 
     def __del__(self):
         lib.ma_context_uninit(self._context)
@@ -974,10 +975,19 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
                 if want_frames > allocated_buffer_frames:
                     raise MiniaudioError("wanted to read more frames than storage was allocated for ({} vs {})"
                                          .format(want_frames, allocated_buffer_frames))
-                try:
-                    num_frames = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames)
-                except Exception as x:
-                    raise DecodeError("error in ma_decoder_read_pcm_frames") from x
+                num_frames = 0
+                with ffi.new("ma_uint64 *") as frames_read:
+                    try:
+                        result = lib.ma_decoder_read_pcm_frames(decoder, buf_ptr, want_frames, frames_read)
+                    except Exception as x:
+                        raise DecodeError("error in ma_decoder_read_pcm_frames") from x
+                    else:
+                        if result == lib.MA_SUCCESS:
+                            num_frames = frames_read[0]
+                        elif result == lib.MA_AT_END:
+                            break
+                        else:
+                            raise DecodeError("error in ma_decoder_read_pcm_frames")
                 if num_frames <= 0:
                     break
                 if source and source.error_in_readcallback:
@@ -1203,14 +1213,8 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
     decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
     decoder_config.ditherMode = dither.value
     source.ffi_handle = ffi.new_handle(source)
-    decoder_init = {
-        FileFormat.UNKNOWN: lib.ma_decoder_init,
-        FileFormat.VORBIS: lib.ma_decoder_init_vorbis,
-        FileFormat.WAV: lib.ma_decoder_init_wav,
-        FileFormat.FLAC: lib.ma_decoder_init_flac,
-        FileFormat.MP3: lib.ma_decoder_init_mp3
-    }[source_format]
-    result = decoder_init(lib._internal_decoder_read_callback, lib._internal_decoder_seek_callback,
+    decoder_config.encodingFormat = source_format.value
+    result = lib.ma_decoder_init(lib._internal_decoder_read_callback, lib._internal_decoder_seek_callback,
                           source.ffi_handle, ffi.addressof(decoder_config), decoder)
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to init decoder", result)
@@ -1243,28 +1247,30 @@ def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
 
 
 @ffi.def_extern()
-def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int) -> int:
+def _internal_decoder_read_callback(decoder: ffi.CData, output: ffi.CData, num_bytes: int, bytes_read: ffi.CData) -> int:
+    bytes_read[0] = 0
     if num_bytes <= 0 or not decoder.pUserData:
-        return 0
+        return lib.MA_ERROR
     source = ffi.from_handle(decoder.pUserData)   # type: StreamableSource
     if source.error_in_readcallback is None:
         try:
             data = source.read(num_bytes)
             ffi.memmove(output, data, len(data))
-            return len(data)
+            bytes_read[0] = len(data)
+            return lib.MA_SUCCESS if len(data) > 0 else lib.MA_AT_END
         except Exception as x:
             source.error_in_readcallback = x
-    return 0
+    return lib.MA_ERROR
 
 
 @ffi.def_extern()
 def _internal_decoder_seek_callback(decoder: ffi.CData, offset: int, seek_origin: int) -> int:
     if not decoder.pUserData:
-        return False
+        return lib.MA_ERROR
     if offset == 0 and seek_origin == lib.ma_seek_origin_current:
-        return True
+        return lib.MA_SUCCESS
     source = ffi.from_handle(decoder.pUserData)
-    return int(source.seek(offset, SeekOrigin(seek_origin)))
+    return lib.MA_SUCCESS if int(source.seek(offset, SeekOrigin(seek_origin))) else lib.MA_BAD_SEEK
 
 
 def convert_sample_format(from_fmt: SampleFormat, sourcedata: bytes, to_fmt: SampleFormat,

@@ -23,6 +23,7 @@ This module provides:
 - Audio file and Icecast internet radio streaming
 - TODO: filters
 - TODO: waveform generators
+- TODO: high-level miniaudio library interface to Engine etc.
 
 
 This library aims to provide a Pythonic interface to the miniaudio C library.
@@ -124,7 +125,7 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 
 *enum class*  ``FileFormat``
- names:  ``UNKNOWN`` ``WAV`` ``FLAC`` ``VORBIS`` ``MP3``
+ names:  ``UNKNOWN`` ``WAV`` ``FLAC`` ``MP3`` ``VORBIS``
 > Audio file format
 
 
