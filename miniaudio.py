@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.50"
+__version__ = "1.51"
 
 
 import abc
@@ -121,7 +121,7 @@ class SoundFileInfo:
         self.sample_rate = sample_rate
         self.sample_format = sample_format
         self.sample_format_name = ffi.string(lib.ma_get_format_name(sample_format.value)).decode()
-        self.sample_width = _width_from_format(sample_format)
+        self.sample_width = width_from_format(sample_format)
         self.num_frames = num_frames
         self.duration = duration
         self.file_format = file_format
@@ -881,7 +881,8 @@ class Devices:
         lib.ma_context_uninit(self._context)
 
 
-def _width_from_format(sampleformat: SampleFormat) -> int:
+def width_from_format(sampleformat: SampleFormat) -> int:
+    """returns the sample width in bytes, of the given sample format."""
     widths = {
         SampleFormat.UNSIGNED8: 1,
         SampleFormat.SIGNED16: 2,
@@ -925,7 +926,7 @@ def _format_from_width(sample_width: int, is_float: bool = False) -> SampleForma
 def decode_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED16,
                 nchannels: int = 2, sample_rate: int = 44100, dither: DitherMode = DitherMode.NONE) -> DecodedSoundFile:
     """Convenience function to decode any supported audio file to raw PCM samples in your chosen format."""
-    sample_width = _width_from_format(output_format)
+    sample_width = width_from_format(output_format)
     samples = _array_proto_from_format(output_format)
     filenamebytes = _get_filename_bytes(filename)
     with ffi.new("ma_uint64 *") as frames, ffi.new("void **") as memory:
@@ -943,7 +944,7 @@ def decode_file(filename: str, output_format: SampleFormat = SampleFormat.SIGNED
 def decode(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED16,
            nchannels: int = 2, sample_rate: int = 44100, dither: DitherMode = DitherMode.NONE) -> DecodedSoundFile:
     """Convenience function to decode any supported audio file in memory to raw PCM samples in your chosen format."""
-    sample_width = _width_from_format(output_format)
+    sample_width = width_from_format(output_format)
     samples = _array_proto_from_format(output_format)
     with ffi.new("ma_uint64 *") as frames, ffi.new("void **") as memory:
         decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, sample_rate)
@@ -961,7 +962,7 @@ def _samples_stream_generator(frames_to_read: int, nchannels: int, output_format
                               decoder: ffi.CData, data: Any,
                               on_close: Optional[Callable] = None) -> Generator[array.array, int, None]:
     _reference = data    # make sure any data passed in is not garbage collected
-    sample_width = _width_from_format(output_format)
+    sample_width = width_from_format(output_format)
     samples_proto = _array_proto_from_format(output_format)
     allocated_buffer_frames = max(frames_to_read, 16384)
     try:
@@ -1049,6 +1050,36 @@ def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED
         raise DecodeError("failed to init decoder", result)
     g = _samples_stream_generator(frames_to_read, nchannels, output_format, decoder, data)
     dummy = next(g)
+    assert len(dummy) == 0
+    return g
+
+
+def stream_raw_pcm_memory(pcmdata: Union[array.array, memoryview, bytes], nchannels: int, sample_width: int) -> PlaybackCallbackGeneratorType:
+    """
+    Convenience generator function to stream raw pcm audio data from memory.
+    Usually you don't need to use this as the library provides many other streaming
+    options that work on much smaller, encoded, audio data.
+    However in the odd case that you only have already decoded raw pcm data you can use
+    this generator as a stream source.
+
+    The data can be provided in ``array`` type or ``bytes``, ``memoryview`` or even a numpy array.
+    Be sure to also specify the correct number of channels that the audio data has, and the
+    sample with in bytes.
+    """
+    def _mem_stream_gen() -> PlaybackCallbackGeneratorType:
+        nonlocal sample_width
+        # sample_width should be provided if the data is not an array.array, but a bytes type instead.
+        if type(pcmdata) is array.array:
+            sample_width = 1   # array.array frames already yield the correct data size
+        memdata = memoryview(pcmdata)
+        required_frames = yield b""  # generator initialization
+        frames = 0
+        while frames < len(memdata):
+            frames_end = frames + required_frames * nchannels * sample_width
+            required_frames = yield memdata[frames:frames_end]
+            frames = frames_end
+    g = _mem_stream_gen()
+    dummy = next(g)  # start the generator
     assert len(dummy) == 0
     return g
 
@@ -1277,9 +1308,9 @@ def convert_sample_format(from_fmt: SampleFormat, sourcedata: bytes, to_fmt: Sam
                           dither: DitherMode = DitherMode.NONE) -> bytearray:
     """Convert a raw buffer of pcm samples to another sample format.
     The result is returned as another raw pcm sample buffer"""
-    sample_width = _width_from_format(from_fmt)
+    sample_width = width_from_format(from_fmt)
     num_samples = len(sourcedata) // sample_width
-    sample_width = _width_from_format(to_fmt)
+    sample_width = width_from_format(to_fmt)
     buffer = bytearray(sample_width * num_samples)
     lib.ma_pcm_convert(ffi.from_buffer(buffer), to_fmt.value, sourcedata, from_fmt.value, num_samples, dither.value)
     return buffer
@@ -1289,9 +1320,9 @@ def convert_frames(from_fmt: SampleFormat, from_numchannels: int, from_samplerat
                    to_fmt: SampleFormat, to_numchannels: int, to_samplerate: int) -> bytearray:
     """Convert audio frames in source sample format with a certain number of channels,
     to another sample format and possibly down/upmixing the number of channels as well."""
-    sample_width = _width_from_format(from_fmt)
+    sample_width = width_from_format(from_fmt)
     num_frames = int(len(sourcedata) / from_numchannels / sample_width)
-    sample_width = _width_from_format(to_fmt)
+    sample_width = width_from_format(to_fmt)
     output_frame_count = lib.ma_calculate_frame_count_after_resampling(to_samplerate, from_samplerate, num_frames)
     buffer = bytearray(output_frame_count * sample_width * to_numchannels)
     # note: the API doesn't have an option here to specify the dither mode.
@@ -1406,7 +1437,7 @@ class CaptureDevice(AbstractDevice):
                  thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
         super().__init__()
         self.format = input_format
-        self.sample_width = _width_from_format(input_format)
+        self.sample_width = width_from_format(input_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
@@ -1460,7 +1491,7 @@ class PlaybackDevice(AbstractDevice):
                  thread_prio: ThreadPriority = ThreadPriority.HIGHEST, app_name: str = "") -> None:
         super().__init__()
         self.format = output_format
-        self.sample_width = _width_from_format(output_format)
+        self.sample_width = width_from_format(output_format)
         self.nchannels = nchannels
         self.sample_rate = sample_rate
         self.buffersize_msec = buffersize_msec
@@ -1522,7 +1553,7 @@ class DuplexStream(AbstractDevice):
         super().__init__()
         self.capture_format = capture_format
         self.playback_format = playback_format
-        self.sample_width = _width_from_format(capture_format)
+        self.sample_width = width_from_format(capture_format)
         self.capture_channels = capture_channels
         self.playback_channels = playback_channels
         self.sample_rate = sample_rate
@@ -1596,7 +1627,7 @@ class WavFileReadStream(io.RawIOBase):
         self.nchannels = nchannels
         self.format = output_format
         self.max_frames = max_frames
-        self.sample_width = _width_from_format(output_format)
+        self.sample_width = width_from_format(output_format)
         self.max_bytes = (max_frames * nchannels * self.sample_width) or sys.maxsize
         self.bytes_done = 0
         # create WAVE header
