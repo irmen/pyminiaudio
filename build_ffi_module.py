@@ -834,8 +834,11 @@ ffibuilder.set_source("_miniaudio", """
                       libraries=libraries,
                       extra_compile_args=compiler_args,
                       define_macros=[
-                          ("MA_NO_GENERATION", "1"),
-                          ("MA_NO_ENCODING", "1")
+                          ("MA_NO_GENERATION", "1"),        # waveform generation
+                          ("MA_NO_ENCODING", "1"),          # audio encoding
+                          ("MA_NO_RESOURCE_MANAGER", "1"),  # high level api
+                          ("MA_NO_NODE_GRAPH", "1"),        # high level api
+                          ("MA_NO_ENGINE", "1")             # high level api
                       ]
                     )
 

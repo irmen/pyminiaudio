@@ -23,7 +23,7 @@ This module provides:
 - Audio file and Icecast internet radio streaming
 - TODO: filters
 - TODO: waveform generators
-- TODO: high-level miniaudio library interface to Engine etc.
+- TODO: add high-level miniaudio library interface once it's stabilized? Lot of work though. 
 
 
 This library aims to provide a Pythonic interface to the miniaudio C library.
