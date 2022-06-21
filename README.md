@@ -283,6 +283,15 @@ amount. This is particularly useful to plug this stream into an audio device cal
 variable number of frames per call.
 
 
+*function*  ``stream_raw_pcm_memory  (pcmdata: Union[array.array, memoryview, bytes], nchannels: int, sample_width: int) -> Generator[Union[bytes, array.array], int, NoneType]``
+> Convenience generator function to stream raw pcm audio data from memory. Usually you don't need to
+use this as the library provides many other streaming options that work on much smaller, encoded,
+audio data. However in the odd case that you only have already decoded raw pcm data you can use this
+generator as a stream source.  The data can be provided in ``array`` type or ``bytes``,
+``memoryview`` or even a numpy array. Be sure to also specify the correct number of channels that
+the audio data has, and the sample with in bytes.
+
+
 *function*  ``vorbis_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
 > Fetch some information about the audio file (vorbis format).
 
@@ -345,6 +354,10 @@ stream_file() instead.
 
 *function*  ``wav_write_file  (filename: str, sound: miniaudio.DecodedSoundFile) ``
 > Writes the pcm sound to a WAV file
+
+
+*function*  ``width_from_format  (sampleformat: miniaudio.SampleFormat) -> int``
+> returns the sample width in bytes, of the given sample format.
 
 
 *class*  ``CaptureDevice``
