@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.51"
+__version__ = "1.52-dev"
 
 
 import abc
@@ -1054,12 +1054,14 @@ def stream_memory(data: bytes, output_format: SampleFormat = SampleFormat.SIGNED
     return g
 
 
-def stream_raw_pcm_memory(pcmdata: Union[array.array, memoryview, bytes], nchannels: int, sample_width: int) -> PlaybackCallbackGeneratorType:
+def stream_raw_pcm_memory(pcmdata: Union[array.array, memoryview, bytes],
+                          nchannels: int, sample_width: int,
+                          frames_to_read: int = 4096) -> PlaybackCallbackGeneratorType:
     """
     Convenience generator function to stream raw pcm audio data from memory.
     Usually you don't need to use this as the library provides many other streaming
     options that work on much smaller, encoded, audio data.
-    However in the odd case that you only have already decoded raw pcm data you can use
+    However, in the odd case that you only have already decoded raw pcm data you can use
     this generator as a stream source.
 
     The data can be provided in ``array`` type or ``bytes``, ``memoryview`` or even a numpy array.
@@ -1072,12 +1074,13 @@ def stream_raw_pcm_memory(pcmdata: Union[array.array, memoryview, bytes], nchann
         if type(pcmdata) is array.array:
             sample_width = 1   # array.array frames already yield the correct data size
         memdata = memoryview(pcmdata)
-        required_frames = yield b""  # generator initialization
+        required_frames = (yield b"") or frames_to_read  # generator initialization
         frames = 0
         while frames < len(memdata):
             frames_end = frames + required_frames * nchannels * sample_width
-            required_frames = yield memdata[frames:frames_end]
+            required_frames = (yield memdata[frames:frames_end]) or frames_to_read
             frames = frames_end
+            print("RF=", required_frames)
     g = _mem_stream_gen()
     dummy = next(g)  # start the generator
     assert len(dummy) == 0
