@@ -809,7 +809,7 @@ libraries = []
 
 if os.name == "posix":
     compiler_args = ["-g1", "-O3", "-ffast-math"]
-    libraries = ["m", "pthread", "dl"]
+    libraries = ["m", "pthread", "dl", "atomic"]
 
     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
         compiler_args += shlex.split(os.environ.get("PYMINIAUDIO_EXTRA_CFLAGS", ""))
