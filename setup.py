@@ -25,8 +25,8 @@ if __name__ == "__main__":
         zip_safe=False,
         include_package_data=False,
         py_modules=["miniaudio"],
-        install_requires=["cffi>=1.12.0"],
-        setup_requires=["cffi>=1.12.0"],
+        install_requires=["cffi>=1.12.0", "wheel"],
+        setup_requires=["cffi>=1.12.0", "wheel"],
         tests_require=[],
         test_suite="setup.miniaudio_test_suite"
     )
