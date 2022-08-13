@@ -11,6 +11,7 @@ Software license: "MIT software license". See http://opensource.org/licenses/MIT
 
 
 import os
+import subprocess
 import shlex
 from cffi import FFI
 
@@ -807,10 +808,38 @@ ffibuilder.cdef(vorbis_defs + miniaudio_defs)
 compiler_args = []
 libraries = []
 
+
+def check_linker_need_libatomic():
+    """
+    Test if linker on system needs libatomic.
+    This has been copied from https://github.com/grpc/grpc/blob/master/setup.py#L205
+    """
+    code_test = (b'#include <atomic>\n' +
+                 b'int main() { return std::atomic<int64_t>{}; }')
+    cxx = shlex.split(os.environ.get('CXX', 'c++'))
+    cpp_test = subprocess.Popen(cxx + ['-x', 'c++', '-std=c++14', '-'],
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+    cpp_test.communicate(input=code_test)
+    if cpp_test.returncode == 0:
+        return False
+    # Double-check to see if -latomic actually can solve the problem.
+    # https://github.com/grpc/grpc/issues/22491
+    cpp_test = subprocess.Popen(cxx +
+                                ['-x', 'c++', '-std=c++14', '-', '-latomic'],
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+    cpp_test.communicate(input=code_test)
+    return cpp_test.returncode == 0
+
+
 if os.name == "posix":
     compiler_args = ["-g1", "-O3", "-ffast-math"]
-    libraries = ["m", "pthread", "dl", "atomic"]
-
+    libraries = ["m", "pthread", "dl"]
+    if check_linker_need_libatomic():
+        libraries.append("atomic")
     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
         compiler_args += shlex.split(os.environ.get("PYMINIAUDIO_EXTRA_CFLAGS", ""))
 
@@ -844,4 +873,5 @@ ffibuilder.set_source("_miniaudio", """
 
 
 if __name__ == "__main__":
+    print("NEED LIBATOMIC?", check_linker_need_libatomic())
     ffibuilder.compile(verbose=True)
