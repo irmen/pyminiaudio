@@ -4,11 +4,11 @@ all:
 	@echo "Targets:  clean, test, docs, dist, win_wheels, linux_wheel, check_upload, upload"
 
 clean:
-	rm -f dist/* *.so
+	rm -f dist/* *.so *.pyd
 	python setup.py clean --all
 
 test:
-	rm -f *.so
+	rm -f *.so *.pyd
 	python setup.py build
 	python setup.py test
 	python -m pytest -v tests
