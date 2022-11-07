@@ -1268,11 +1268,16 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
 
 def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
                           progress_callback: Union[Callable[[int], None], None] = None,
+                          frame_process_method: Union[Callable[[array.array], None], None] = None,
                           end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
     frame_count = yield b""
     try:
         while True:
-            frame_count = yield sample_stream.send(frame_count)
+            frame = sample_stream.send(frame_count)
+            if frame_process_method:
+                frame_count = yield frame_process_method(frame)
+            else:
+                frame_count = yield frame
             if progress_callback:
                 progress_callback(frame_count)
     except StopIteration:
