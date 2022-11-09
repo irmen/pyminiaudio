@@ -1269,6 +1269,12 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
 def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
                           progress_callback: Union[Callable[[int], None], None] = None,
                           end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
+    """
+    Convenience generator function to add callback functionality to another stream.
+    You can specify a callback function that gets called often during play, to keep track
+    of the number of frames played. There's also a callback function that gets called
+    when the stream ends playing.
+    """
     frame_count = yield b""
     try:
         while True:
