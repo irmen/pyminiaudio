@@ -1271,10 +1271,16 @@ def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
                           frame_process_method: Union[Callable[[array.array], None], None] = None,
                           end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
     """
-    Convenience generator function to add callback functionality to another stream.
-    You can specify a callback function that gets called often during play, to keep track
-    of the number of frames played. There's also a callback function that gets called
-    when the stream ends playing.
+    Convenience generator function to add callback and processing functionality to another stream.
+    You can specify :
+    > A callback function that gets called during play and takes an int
+    for the number of frames played.
+
+    > A function that can be used to process raw data frames before they are yielded back
+    (takes an array.array)
+    *Note: if the processing method is slow it will result in audio glitchiness
+
+    > A callback function that gets called when the stream ends playing.
     """
     frame_count = yield b""
     try:
