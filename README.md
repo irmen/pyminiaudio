@@ -284,7 +284,7 @@ the audio data has, and the sample with in bytes.
 A callback function that gets called during play and takes an ``int``
 for the number of frames played.
 A function that can be used to process raw data frames before they are yielded back
-(takes an ``array.array``)
+(takes an ``array.array`` and returns an ``array.array``)
 *Note: if the processing method is slow it will result in audio glitchiness*
 A callback function that gets called when the stream ends playing.
 

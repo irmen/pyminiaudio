@@ -1277,7 +1277,7 @@ def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
     for the number of frames played.
 
     > A function that can be used to process raw data frames before they are yielded back
-    (takes an array.array)
+    (takes an array.array returns an array.array)
     *Note: if the processing method is slow it will result in audio glitchiness
 
     > A callback function that gets called when the stream ends playing.
