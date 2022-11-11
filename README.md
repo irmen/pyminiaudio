@@ -279,10 +279,14 @@ this generator as a stream source.  The data can be provided in ``array`` type o
 the audio data has, and the sample with in bytes.
 
 
-*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
-> Convenience generator function to add callback functionality to another stream. You can specify a
-callback function that gets called often during play, to keep track of the number of frames played.
-There's also a callback function that gets called when the stream ends playing.
+*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Union[Callable[[array.array], None], None] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
+> Convenience generator function to add callback and processing functionality to another stream. You can specify a:
+A callback function that gets called during play and takes an ``int``
+for the number of frames played.
+A function that can be used to process raw data frames before they are yielded back
+(takes an ``array.array`` and returns an ``array.array``)
+*Note: if the processing method is slow it will result in audio glitchiness*
+A callback function that gets called when the stream ends playing.
 
 
 *function*  ``vorbis_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
