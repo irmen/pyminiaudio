@@ -1268,7 +1268,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
 
 def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
                           progress_callback: Union[Callable[[int], None], None] = None,
-                          frame_process_method: Union[Callable[[array.array], None], None] = None,
+                          frame_process_method: Union[Callable[[array.array], array.array], None] = None,
                           end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
     """
     Convenience generator function to add callback and processing functionality to another stream.

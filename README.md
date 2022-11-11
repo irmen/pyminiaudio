@@ -279,8 +279,8 @@ this generator as a stream source.  The data can be provided in ``array`` type o
 the audio data has, and the sample with in bytes.
 
 
-*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Union[Callable[[array.array], None], None] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
-> Convenience generator function to add callback and processing functionality to another stream. You can specify a:
+*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Union[Callable[[array.array], array.array], None] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
+> Convenience generator function to add callback and processing functionality to another stream. You can specify:
 A callback function that gets called during play and takes an ``int``
 for the number of frames played.
 A function that can be used to process raw data frames before they are yielded back
