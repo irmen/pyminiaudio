@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.54"
+__version__ = "1.55.dev0"
 
 
 import abc
@@ -106,16 +106,18 @@ class SeekOrigin(Enum):
     CURRENT = lib.ma_seek_origin_current
 
 
-PlaybackCallbackGeneratorType = Generator[Union[bytes, array.array], int, None]
-CaptureCallbackGeneratorType = Generator[None, Union[bytes, array.array], None]
-DuplexCallbackGeneratorType = Generator[Union[bytes, array.array], Union[bytes, array.array], None]
+FramesType = Union[bytes, array.array]
+PlaybackCallbackGeneratorType = Generator[FramesType, int, None]
+CaptureCallbackGeneratorType = Generator[None, FramesType, None]
+DuplexCallbackGeneratorType = Generator[FramesType, FramesType, None]
 GeneratorTypes = Union[PlaybackCallbackGeneratorType, CaptureCallbackGeneratorType, DuplexCallbackGeneratorType]
 
 
 class SoundFileInfo:
     """Contains various properties of an audio file."""
     def __init__(self, name: str, file_format: FileFormat, nchannels: int, sample_rate: int,
-                 sample_format: SampleFormat, duration: float, num_frames: int) -> None:
+                 sample_format: SampleFormat, duration: float, num_frames: int,
+                 sub_format: int = None) -> None:
         self.name = name
         self.nchannels = nchannels
         self.sample_rate = sample_rate
@@ -125,10 +127,15 @@ class SoundFileInfo:
         self.num_frames = num_frames
         self.duration = duration
         self.file_format = file_format
+        self.sub_format = sub_format
 
     def __str__(self) -> str:
-        return "<{clazz}: '{name}' {nchannels} ch, {sample_rate} hz, {sample_format.name}, " \
-               "{num_frames} frames={duration:.2f} sec.>".format(clazz=self.__class__.__name__, **(vars(self)))
+        fileformatdisplay = self.file_format.name
+        if self.sub_format:
+            fileformatdisplay += " (fmt=" + str(self.sub_format) + ")"
+        return "<{clazz}: '{name}' {fileformatdisplay} {nchannels} ch, {sample_rate} hz, {sample_format.name}, " \
+               "{num_frames} frames={duration:.2f} sec.>".format(clazz=self.__class__.__name__,
+                                                                 fileformatdisplay=fileformatdisplay, **(vars(self)))
 
     def __repr__(self) -> str:
         return str(self)
@@ -619,8 +626,10 @@ def wav_get_file_info(filename: str) -> SoundFileInfo:
             duration = wav.totalPCMFrameCount / wav.sampleRate
             sample_width = wav.bitsPerSample // 8
             is_float = wav.translatedFormatTag == lib.DR_WAVE_FORMAT_IEEE_FLOAT
+            subformat = wav.translatedFormatTag
             return SoundFileInfo(filename, FileFormat.WAV, wav.channels, wav.sampleRate,
-                                 _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount)
+                                 _format_from_width(sample_width, is_float), duration, wav.totalPCMFrameCount,
+                                 sub_format=subformat)
         finally:
             lib.drwav_uninit(wav)
 
@@ -777,7 +786,7 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     """Writes the pcm sound to a WAV file"""
     with ffi.new("drwav_data_format*") as fmt, ffi.new("drwav*") as pwav:
         fmt.container = lib.drwav_container_riff
-        fmt.format = lib.DR_WAVE_FORMAT_PCM
+        fmt.format = sound.sub_format or lib.DR_WAVE_FORMAT_PCM
         fmt.channels = sound.nchannels
         fmt.sampleRate = sound.sample_rate
         fmt.bitsPerSample = sound.sample_width * 8
@@ -884,6 +893,7 @@ class Devices:
 def width_from_format(sampleformat: SampleFormat) -> int:
     """returns the sample width in bytes, of the given sample format."""
     widths = {
+        SampleFormat.UNKNOWN: 0,
         SampleFormat.UNSIGNED8: 1,
         SampleFormat.SIGNED16: 2,
         SampleFormat.SIGNED24: 3,
@@ -919,6 +929,8 @@ def _format_from_width(sample_width: int, is_float: bool = False) -> SampleForma
         return SampleFormat.SIGNED24
     elif sample_width == 4:
         return SampleFormat.SIGNED32
+    elif sample_width == 0:
+        return SampleFormat.UNKNOWN
     else:
         raise MiniaudioError("unsupported sample width", sample_width)
 
@@ -1080,7 +1092,6 @@ def stream_raw_pcm_memory(pcmdata: Union[array.array, memoryview, bytes],
             frames_end = frames + required_frames * nchannels * sample_width
             required_frames = (yield memdata[frames:frames_end]) or frames_to_read
             frames = frames_end
-            print("RF=", required_frames)
     g = _mem_stream_gen()
     dummy = next(g)  # start the generator
     assert len(dummy) == 0
@@ -1268,7 +1279,7 @@ def stream_any(source: StreamableSource, source_format: FileFormat = FileFormat.
 
 def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
                           progress_callback: Union[Callable[[int], None], None] = None,
-                          frame_process_method: Union[Callable[[array.array], array.array], None] = None,
+                          frame_process_method: Union[Callable[[FramesType], FramesType], None] = None,
                           end_callback: Union[Callable, None] = None) -> PlaybackCallbackGeneratorType:
     """
     Convenience generator function to add callback and processing functionality to another stream.
@@ -1277,7 +1288,7 @@ def stream_with_callbacks(sample_stream: PlaybackCallbackGeneratorType,
     for the number of frames played.
 
     > A function that can be used to process raw data frames before they are yielded back
-    (takes an array.array returns an array.array)
+    (takes an array.array or bytes, returns an array.array or bytes)
     *Note: if the processing method is slow it will result in audio glitchiness
 
     > A callback function that gets called when the stream ends playing.

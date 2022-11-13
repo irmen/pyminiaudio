@@ -10,8 +10,11 @@ import miniaudio
 
 def show_info(info):
     print("file:", info.name)
+    format_display = info.file_format.name
+    if info.sub_format:
+        format_display += " (fmt="+str(info.sub_format)+")"
     print("format: {}, {} channels, {} khz, {:.1f} seconds".format(
-        info.file_format, info.nchannels, info.sample_rate, info.duration))
+        format_display, info.nchannels, info.sample_rate, info.duration))
     print("{} bytes per sample: {}".format(info.sample_width, info.sample_format_name))
 
 
