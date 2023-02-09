@@ -90,6 +90,7 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 ## API
 
+### Note: everything below is automatically generated from comments in the source code files. Do not edit in this readme directly.
 
 *enum class*  ``Backend``
  names:  ``WASAPI`` ``DSOUND`` ``WINMM`` ``COREAUDIO`` ``SNDIO`` ``AUDIO4`` ``OSS`` ``PULSEAUDIO`` ``ALSA`` ``JACK`` ``AAUDIO`` ``OPENSL`` ``WEBAUDIO`` ``CUSTOM`` ``NULL``
