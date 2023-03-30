@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.55"
+__version__ = "1.56"
 
 
 import abc
@@ -1130,17 +1130,20 @@ class StreamableSource(abc.ABC):
 class IceCastClient(StreamableSource):
     """
     A simple client for IceCast audio streams as miniaudio streamable source.
-    If the stream has Icy Meta Data, the stream_title attribute will be updated
-    with the actual title taken from the meta data.
+    If the stream has Icy MetaData, the stream_title attribute will be updated
+    with the actual title taken from the metadata.
     You can also provide a callback to be called when a new stream title is available.
     The downloading of the data from the internet is done in a background thread
     and it tries to keep a (small) buffer filled with available data to read.
+    You can optionally provide a custom ssl.SSLContext in the ssl_context parameter,
+    if you need to change the way SSL connections are configured (certificates, checks, etc).
     """
 
     BLOCK_SIZE = 8*1024
     BUFFER_SIZE = 64*1024
 
-    def __init__(self, url: str, update_stream_title: Callable[['IceCastClient', str], None] = None) -> None:
+    def __init__(self, url: str, update_stream_title: Callable[['IceCastClient', str], None] = None,
+                 ssl_context: "ssl.SSLContext" = None) -> None:
         self.url = url
         self.stream_title = "???"
         self.station_genre = "???"
@@ -1152,7 +1155,7 @@ class IceCastClient(StreamableSource):
         self._buffer_lock = threading.Lock()
         self._update_title = update_stream_title
         req = urllib.request.Request(url, headers={"icy-metadata": "1"})
-        with urllib.request.urlopen(req) as result:
+        with urllib.request.urlopen(req, context=ssl_context) as result:
             self.station_genre = result.headers["icy-genre"]
             self.station_name = result.headers["icy-name"]
             stream_format = result.headers["Content-Type"]

@@ -11,7 +11,15 @@ if __name__ == "__main__":
     def title_printer(client: miniaudio.IceCastClient, new_title: str) -> None:
         print("Stream title: ", new_title)
 
-    source = miniaudio.IceCastClient(url, update_stream_title=title_printer)
+    # you can optionally pass a SSL context in the 'ssl_context' keyword argument,
+    # to configure the SSL connection.
+    # For instance, to disable the SSL certificate check:
+    #  import ssl
+    #  ctx = ssl.create_default_context()
+    #  ctx.check_hostname = False
+    #  ctx.verify_mode = ssl.CERT_NONE
+    # and then create the IceCastClient with ssl_context=ctx
+    source = miniaudio.IceCastClient(url, update_stream_title=title_printer, ssl_context=None)
     print("Connected to internet stream, audio format:", source.audio_format.name)
     print("Station name: ", source.station_name)
     print("Station genre: ", source.station_genre)

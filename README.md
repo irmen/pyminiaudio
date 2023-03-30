@@ -280,14 +280,13 @@ this generator as a stream source.  The data can be provided in ``array`` type o
 the audio data has, and the sample with in bytes.
 
 
-*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Union[Callable[[array.array], array.array], None] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
-> Convenience generator function to add callback and processing functionality to another stream. You can specify:
-A callback function that gets called during play and takes an ``int``
-for the number of frames played.
-A function that can be used to process raw data frames before they are yielded back
-(takes an ``array.array`` and returns an ``array.array``)
-*Note: if the processing method is slow it will result in audio glitchiness*
-A callback function that gets called when the stream ends playing.
+*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Optional[Callable[[Union[bytes, array.array]], Union[bytes, array.array]]] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
+> Convenience generator function to add callback and processing functionality to another stream. You
+can specify : > A callback function that gets called during play and takes an int for the number of
+frames played.  > A function that can be used to process raw data frames before they are yielded
+back (takes an array.array or bytes, returns an array.array or bytes) *Note: if the processing
+method is slow it will result in audio glitchiness  > A callback function that gets called when the
+stream ends playing.
 
 
 *function*  ``vorbis_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
@@ -419,12 +418,14 @@ already be started before passing it in)
 
 *class*  ``IceCastClient``
 
-``IceCastClient  (self, url: str, update_stream_title: Callable[[ForwardRef('IceCastClient'), str], NoneType] = None) ``
+``IceCastClient  (self, url: str, update_stream_title: Callable[[ForwardRef('IceCastClient'), str], NoneType] = None, ssl_context: 'ssl.SSLContext' = None) ``
 > A simple client for IceCast audio streams as miniaudio streamable source. If the stream has Icy
-Meta Data, the stream_title attribute will be updated with the actual title taken from the meta
-data. You can also provide a callback to be called when a new stream title is available. The
-downloading of the data from the internet is done in a background thread and it tries to keep a
-(small) buffer filled with available data to read.
+MetaData, the stream_title attribute will be updated with the actual title taken from the metadata.
+You can also provide a callback to be called when a new stream title is available. The downloading
+of the data from the internet is done in a background thread and it tries to keep a (small) buffer
+filled with available data to read. You can optionally provide a custom ssl.SSLContext in the
+ssl_context parameter, if you need to change the way SSL connections are configured (certificates,
+checks, etc).
 
 > *method*  ``close  (self) ``
 > > Stop the stream, aborting the background downloading.
@@ -464,7 +465,7 @@ The generator should already be started before passing it in.
 
 *class*  ``SoundFileInfo``
 
-``SoundFileInfo  (self, name: str, file_format: miniaudio.FileFormat, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int) ``
+``SoundFileInfo  (self, name: str, file_format: miniaudio.FileFormat, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int, sub_format: int = None) ``
 > Contains various properties of an audio file.
 
 
