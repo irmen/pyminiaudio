@@ -1,4 +1,4 @@
-name: CI
+name: CI run tests
 
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
@@ -20,7 +20,7 @@ jobs:
 
       - name: build and install
         run:
-          pip install .
+          pip install . cffi
 
       - name: test importability
         run:

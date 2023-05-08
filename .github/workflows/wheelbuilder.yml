@@ -1,4 +1,4 @@
-name: Build and upload to PyPI
+name: Release build and upload to PyPI
 
 # Build on every published release
 on:

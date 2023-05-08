@@ -1,6 +1,6 @@
-name: Build and upload to PyPI
+name: CI build wheels
 
-# Build on every published release
+# Build on every checkin
 on: [push, pull_request]
  
 jobs:
