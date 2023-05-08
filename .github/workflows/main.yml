@@ -15,9 +15,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+            
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
+      - uses: actions/setup-python@v4
+        with:
+          python-versio: ${{ $matrix.python-version }}
+
+      
       - name: build and install
         run:
           pip install .
