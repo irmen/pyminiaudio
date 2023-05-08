@@ -1,1 +1,2 @@
 pytest>=6.0
+cffi
