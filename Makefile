@@ -9,6 +9,7 @@ clean:
 
 test:
 	rm -f *.so *.pyd
+	python setup.py clean
 	python setup.py build
 	python setup.py test
 	python -m pytest -v tests
