@@ -106,19 +106,19 @@ def test_cffi_api_calls_parameters_correct():
 
 
 def load_sample(name):
-    with open("examples/samples/" + name, "rb") as f:
+    with open("tests/audio/" + name, "rb") as f:
         return f.read()
 
 
 def test_file_info():
-    info = miniaudio.get_file_info("examples/samples/music.ogg")
+    info = miniaudio.get_file_info("tests/audio/test.ogg")
     assert info.file_format == miniaudio.FileFormat.VORBIS
     assert info.sample_rate == 22050
     assert info.sample_format == miniaudio.SampleFormat.SIGNED16
 
 
 def test_vorbis_info():
-    data = load_sample("music.ogg")
+    data = load_sample("test.ogg")
     info = miniaudio.vorbis_get_info(data)
     assert info.name == "<memory>"
     assert info.nchannels == 2
@@ -131,33 +131,33 @@ def test_vorbis_info():
 
 
 def test_flac_info():
-    data = load_sample("music.flac")
+    data = load_sample("test.flac")
     info = miniaudio.flac_get_info(data)
     assert info.name == "<memory>"
     assert info.nchannels == 2
     assert info.sample_width == 2
-    assert info.duration > 10.0
+    assert info.duration > 0.9
     assert info.file_format == miniaudio.FileFormat.FLAC
-    assert info.num_frames > 200000
+    assert info.num_frames > 20000
     assert info.sample_rate == 22050
     assert info.sample_format == miniaudio.SampleFormat.SIGNED16
 
 
 def test_wav_info():
-    data = load_sample("music.wav")
+    data = load_sample("test.wav")
     info = miniaudio.wav_get_info(data)
     assert info.name == "<memory>"
     assert info.nchannels == 2
     assert info.sample_width == 2
-    assert info.duration > 10.0
+    assert info.duration > 0.9
     assert info.file_format == miniaudio.FileFormat.WAV
-    assert info.num_frames > 200000
+    assert info.num_frames > 20000
     assert info.sample_rate == 22050
     assert info.sample_format == miniaudio.SampleFormat.SIGNED16
 
 
 def test_mp3_info():
-    data = load_sample("music.mp3")
+    data = load_sample("test.mp3")
     info = miniaudio.mp3_get_info(data)
     assert info.name == "<memory>"
     assert info.nchannels == 2
@@ -170,7 +170,7 @@ def test_mp3_info():
 
 
 def test_mp3_read():
-    data = load_sample("music.mp3")
+    data = load_sample("test.mp3")
     sound = miniaudio.mp3_read_f32(data)
     assert sound.nchannels == 2
     assert sound.sample_rate == 22050
@@ -185,7 +185,7 @@ def test_mp3_read():
 
 def test_mp3_stream():
     frames_to_read = 256
-    stream = miniaudio.mp3_stream_file("examples/samples/music.mp3", frames_to_read)
+    stream = miniaudio.mp3_stream_file("tests/audio/test.mp3", frames_to_read)
     assert len(next(stream)) >= 512
     assert len(next(stream)) >= 512
     stream.close()
@@ -193,7 +193,7 @@ def test_mp3_stream():
 
 def test_wav_stream():
     frames_to_read = 256
-    stream = miniaudio.wav_stream_file("examples/samples/music.wav", frames_to_read)
+    stream = miniaudio.wav_stream_file("tests/audio/test.wav", frames_to_read)
     assert len(next(stream)) >= 512
     assert len(next(stream)) >= 512
     stream.close()
@@ -201,7 +201,7 @@ def test_wav_stream():
 
 def test_flac_stream():
     frames_to_read = 256
-    stream = miniaudio.flac_stream_file("examples/samples/music.flac", frames_to_read)
+    stream = miniaudio.flac_stream_file("tests/audio/test.flac", frames_to_read)
     assert len(next(stream)) >= 512
     assert len(next(stream)) >= 512
     stream.close()
@@ -209,35 +209,35 @@ def test_flac_stream():
 
 def test_oggvorbis_stream():
     frames_to_read = 256
-    stream = miniaudio.vorbis_stream_file("examples/samples/music.ogg", frames_to_read)
+    stream = miniaudio.vorbis_stream_file("tests/audio/test.ogg", frames_to_read)
     assert len(next(stream)) >= 512
     assert len(next(stream)) >= 512
     stream.close()
 
 
 def test_flac_read():
-    data = load_sample("music.flac")
+    data = load_sample("test.flac")
     sound = miniaudio.flac_read_s32(data)
     assert sound.sample_format == miniaudio.SampleFormat.SIGNED32
     assert sound.sample_rate == 22050
 
 
 def test_vorbis_read():
-    data = load_sample("music.ogg")
+    data = load_sample("test.ogg")
     sound = miniaudio.vorbis_read(data)
     assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
     assert sound.sample_rate == 22050
 
 
 def test_wav_read():
-    data = load_sample("music.wav")
+    data = load_sample("test.wav")
     sound = miniaudio.wav_read_f32(data)
     assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
     assert sound.sample_rate == 22050
 
 
 def test_decode():
-    data = load_sample("music.ogg")
+    data = load_sample("test.ogg")
     decoded = miniaudio.decode(data, miniaudio.SampleFormat.FLOAT32, sample_rate=32000, dither=miniaudio.DitherMode.TRIANGLE)
     assert decoded.sample_format == miniaudio.SampleFormat.FLOAT32
     assert decoded.sample_rate == 32000

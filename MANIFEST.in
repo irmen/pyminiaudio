@@ -1,7 +1,9 @@
 graft miniaudio
+graft tests
 prune examples
 prune .*
 include build_ffi_module.py
 include LICENSE
 include Makefile
 include *.c
+global-exclude *pycache* *.py[cod]
