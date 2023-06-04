@@ -1,5 +1,7 @@
 graft miniaudio
 prune examples
+prune .*
 include build_ffi_module.py
 include LICENSE
 include Makefile
+include *.c
