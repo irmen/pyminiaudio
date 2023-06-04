@@ -117,185 +117,7 @@ int stb_vorbis_get_samples_short(stb_vorbis *f, int channels, short **buffer, in
 
 miniaudio_defs = """
 
-/********************** dr_flac ******************************/
-
-typedef   signed char           drflac_int8;
-typedef unsigned char           drflac_uint8;
-typedef   signed short          drflac_int16;
-typedef unsigned short          drflac_uint16;
-typedef   signed int            drflac_int32;
-typedef unsigned int            drflac_uint32;
-typedef   signed long long      drflac_int64;
-typedef unsigned long long      drflac_uint64;
-typedef drflac_uint8            drflac_bool8;
-typedef drflac_uint32           drflac_bool32;
-
-typedef struct
-{
-    drflac_uint32 sampleRate;
-    drflac_uint8 channels;
-    drflac_uint8 bitsPerSample;
-    drflac_uint16 maxBlockSizeInPCMFrames;
-    drflac_uint64 totalPCMFrameCount;
-
-    ... ;
-
-} drflac;
-
-typedef struct {
-    ... ;
-} drflac_allocation_callbacks;
-
-
-void drflac_close(drflac* pFlac);
-drflac_uint64 drflac_read_pcm_frames_s32(drflac* pFlac, drflac_uint64 framesToRead, drflac_int32* pBufferOut);
-drflac_uint64 drflac_read_pcm_frames_s16(drflac* pFlac, drflac_uint64 framesToRead, drflac_int16* pBufferOut);
-drflac_uint64 drflac_read_pcm_frames_f32(drflac* pFlac, drflac_uint64 framesToRead, float* pBufferOut);
-drflac_bool32 drflac_seek_to_pcm_frame(drflac* pFlac, drflac_uint64 pcmFrameIndex);
-drflac* drflac_open_file(const char* filename, const drflac_allocation_callbacks* pAllocationCallbacks);
-drflac* drflac_open_memory(const void* data, size_t dataSize, const drflac_allocation_callbacks* pAllocationCallbacks);
-drflac_int32* drflac_open_file_and_read_pcm_frames_s32(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-drflac_int16* drflac_open_file_and_read_pcm_frames_s16(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-float* drflac_open_file_and_read_pcm_frames_f32(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-drflac_int32* drflac_open_memory_and_read_pcm_frames_s32(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-drflac_int16* drflac_open_memory_and_read_pcm_frames_s16(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-float* drflac_open_memory_and_read_pcm_frames_f32(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
-void drflac_free(void* p, const drflac_allocation_callbacks* pAllocationCallbacks);
-
-
-/********************** dr_mp3 **********************************/
-
-typedef   signed char           drmp3_int8;
-typedef unsigned char           drmp3_uint8;
-typedef   signed short          drmp3_int16;
-typedef unsigned short          drmp3_uint16;
-typedef   signed int            drmp3_int32;
-typedef unsigned int            drmp3_uint32;
-typedef   signed long long  drmp3_int64;
-typedef unsigned long long  drmp3_uint64;
-typedef drmp3_uint8      drmp3_bool8;
-typedef drmp3_uint32     drmp3_bool32;
-
-
-typedef struct
-{
-    drmp3_uint32 channels;
-    drmp3_uint32 sampleRate;
-} drmp3_config;
-
-typedef struct
-{
-    drmp3_uint32 channels;
-    drmp3_uint32 sampleRate;
-    ...;
-} drmp3;
-
-typedef struct {
-    ...;
-} drmp3_allocation_callbacks;
-
-drmp3_bool32 drmp3_init_memory(drmp3* pMP3, const void* pData, size_t dataSize, const drmp3_allocation_callbacks* pAllocationCallbacks);
-drmp3_bool32 drmp3_init_file(drmp3* pMP3, const char* filePath, const drmp3_allocation_callbacks* pAllocationCallbacks);
-void drmp3_uninit(drmp3* pMP3);
-
-drmp3_uint64 drmp3_read_pcm_frames_f32(drmp3* pMP3, drmp3_uint64 framesToRead, float* pBufferOut);
-drmp3_uint64 drmp3_read_pcm_frames_s16(drmp3* pMP3, drmp3_uint64 framesToRead, drmp3_int16* pBufferOut);
-drmp3_bool32 drmp3_seek_to_pcm_frame(drmp3* pMP3, drmp3_uint64 frameIndex);
-drmp3_uint64 drmp3_get_pcm_frame_count(drmp3* pMP3);
-drmp3_uint64 drmp3_get_mp3_frame_count(drmp3* pMP3);
-drmp3_bool32 drmp3_get_mp3_and_pcm_frame_count(drmp3* pMP3, drmp3_uint64* pMP3FrameCount, drmp3_uint64* pPCMFrameCount);
-
-float* drmp3_open_memory_and_read_pcm_frames_f32(const void* pData, size_t dataSize, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
-drmp3_int16* drmp3_open_memory_and_read_pcm_frames_s16(const void* pData, size_t dataSize, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
-float* drmp3_open_file_and_read_pcm_frames_f32(const char* filePath, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
-drmp3_int16* drmp3_open_file_and_read_pcm_frames_s16(const char* filePath, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
-void drmp3_free(void* p, const drmp3_allocation_callbacks* pAllocationCallbacks);
-
-
-
-/********************** dr_wav **********************************/
-
-/* Common data formats. */
-#define DR_WAVE_FORMAT_PCM          0x1
-#define DR_WAVE_FORMAT_ADPCM        0x2
-#define DR_WAVE_FORMAT_IEEE_FLOAT   0x3
-#define DR_WAVE_FORMAT_ALAW         0x6
-#define DR_WAVE_FORMAT_MULAW        0x7
-#define DR_WAVE_FORMAT_DVI_ADPCM    0x11
-#define DR_WAVE_FORMAT_EXTENSIBLE   0xFFFE
-
-typedef   signed char           drwav_int8;
-typedef unsigned char           drwav_uint8;
-typedef   signed short          drwav_int16;
-typedef unsigned short          drwav_uint16;
-typedef   signed int            drwav_int32;
-typedef unsigned int            drwav_uint32;
-typedef   signed long long  drwav_int64;
-typedef unsigned long long  drwav_uint64;
-typedef drwav_uint8             drwav_bool8;
-typedef drwav_uint32            drwav_bool32;
-
-
-typedef struct
-{
-    drwav_uint32 sampleRate;
-    drwav_uint16 channels;
-    drwav_uint16 bitsPerSample;
-    drwav_uint16 translatedFormatTag;
-    drwav_uint64 totalPCMFrameCount;
-
-    ...;
-
-} drwav;
-
-typedef enum
-{
-    drwav_container_riff,
-    drwav_container_w64
-} drwav_container;
-
-typedef struct
-{
-    drwav_container container;  /* RIFF, W64. */
-    drwav_uint32 format;        /* DR_WAVE_FORMAT_* */
-    drwav_uint32 channels;
-    drwav_uint32 sampleRate;
-    drwav_uint32 bitsPerSample;
-} drwav_data_format;
-
-typedef struct {
-    ...;
-} drwav_allocation_callbacks;
-
-drwav_bool32 drwav_init_file(drwav* pWav, const char* filename, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_memory(drwav* pWav, const void* data, size_t dataSize, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_int32 drwav_uninit(drwav* pWav);
-void drwav_free(void* p, const drwav_allocation_callbacks* pAllocationCallbacks);
-
-drwav_bool32 drwav_init_file_write(drwav* pWav, const char* filename, const drwav_data_format* pFormat, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_file_write_sequential(drwav* pWav, const char* filename, const drwav_data_format* pFormat, drwav_uint64 totalSampleCount, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_file_write_sequential_pcm_frames(drwav* pWav, const char* filename, const drwav_data_format* pFormat, drwav_uint64 totalPCMFrameCount, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_memory_write(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_memory_write_sequential(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, drwav_uint64 totalSampleCount, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_bool32 drwav_init_memory_write_sequential_pcm_frames(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, drwav_uint64 totalPCMFrameCount, const drwav_allocation_callbacks* pAllocationCallbacks);
-
-
-drwav_uint64 drwav_read_pcm_frames(drwav* pWav, drwav_uint64 framesToRead, void* pBufferOut);
-drwav_uint64 drwav_write_pcm_frames(drwav* pWav, drwav_uint64 framesToWrite, const void* pData);
-drwav_bool32 drwav_seek_to_pcm_frame(drwav* pWav, drwav_uint64 targetFrameIndex);
-drwav_uint64 drwav_read_pcm_frames_s16(drwav* pWav, drwav_uint64 framesToRead, drwav_int16* pBufferOut);
-drwav_uint64 drwav_read_pcm_frames_f32(drwav* pWav, drwav_uint64 framesToRead, float* pBufferOut);
-drwav_uint64 drwav_read_pcm_frames_s32(drwav* pWav, drwav_uint64 framesToRead, drwav_int32* pBufferOut);
-
-drwav_int16* drwav_open_file_and_read_pcm_frames_s16(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-float* drwav_open_file_and_read_pcm_frames_f32(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_int32* drwav_open_file_and_read_pcm_frames_s32(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-
-drwav_int16* drwav_open_memory_and_read_pcm_frames_s16(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-float* drwav_open_memory_and_read_pcm_frames_f32(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-drwav_int32* drwav_open_memory_and_read_pcm_frames_s32(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
-
-
+/********** Miniaudio **********/
 
 typedef enum
 {
@@ -809,6 +631,186 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     /* decoder read and seek callbacks */
     extern "Python" ma_result _internal_decoder_read_callback(ma_decoder* pDecoder, void* pBufferOut, size_t bytesToRead, size_t* pBytesRead);
     extern "Python" ma_result _internal_decoder_seek_callback(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
+    
+    
+/********************** dr_flac ******************************/
+
+typedef   signed char           drflac_int8;
+typedef unsigned char           drflac_uint8;
+typedef   signed short          drflac_int16;
+typedef unsigned short          drflac_uint16;
+typedef   signed int            drflac_int32;
+typedef unsigned int            drflac_uint32;
+typedef   signed long long      drflac_int64;
+typedef unsigned long long      drflac_uint64;
+typedef drflac_uint8            drflac_bool8;
+typedef drflac_uint32           drflac_bool32;
+
+typedef struct
+{
+    drflac_uint32 sampleRate;
+    drflac_uint8 channels;
+    drflac_uint8 bitsPerSample;
+    drflac_uint16 maxBlockSizeInPCMFrames;
+    drflac_uint64 totalPCMFrameCount;
+
+    ... ;
+
+} drflac;
+
+typedef struct {
+    ... ;
+} drflac_allocation_callbacks;
+
+
+void drflac_close(drflac* pFlac);
+drflac_uint64 drflac_read_pcm_frames_s32(drflac* pFlac, drflac_uint64 framesToRead, drflac_int32* pBufferOut);
+drflac_uint64 drflac_read_pcm_frames_s16(drflac* pFlac, drflac_uint64 framesToRead, drflac_int16* pBufferOut);
+drflac_uint64 drflac_read_pcm_frames_f32(drflac* pFlac, drflac_uint64 framesToRead, float* pBufferOut);
+drflac_bool32 drflac_seek_to_pcm_frame(drflac* pFlac, drflac_uint64 pcmFrameIndex);
+drflac* drflac_open_file(const char* filename, const drflac_allocation_callbacks* pAllocationCallbacks);
+drflac* drflac_open_memory(const void* data, size_t dataSize, const drflac_allocation_callbacks* pAllocationCallbacks);
+drflac_int32* drflac_open_file_and_read_pcm_frames_s32(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+drflac_int16* drflac_open_file_and_read_pcm_frames_s16(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+float* drflac_open_file_and_read_pcm_frames_f32(const char* filename, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+drflac_int32* drflac_open_memory_and_read_pcm_frames_s32(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+drflac_int16* drflac_open_memory_and_read_pcm_frames_s16(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+float* drflac_open_memory_and_read_pcm_frames_f32(const void* data, size_t dataSize, unsigned int* channels, unsigned int* sampleRate, drflac_uint64* totalPCMFrameCount, const drflac_allocation_callbacks* pAllocationCallbacks);
+void drflac_free(void* p, const drflac_allocation_callbacks* pAllocationCallbacks);
+
+
+/********************** dr_mp3 **********************************/
+
+typedef   signed char           drmp3_int8;
+typedef unsigned char           drmp3_uint8;
+typedef   signed short          drmp3_int16;
+typedef unsigned short          drmp3_uint16;
+typedef   signed int            drmp3_int32;
+typedef unsigned int            drmp3_uint32;
+typedef   signed long long  drmp3_int64;
+typedef unsigned long long  drmp3_uint64;
+typedef drmp3_uint8      drmp3_bool8;
+typedef drmp3_uint32     drmp3_bool32;
+
+
+typedef struct
+{
+    drmp3_uint32 channels;
+    drmp3_uint32 sampleRate;
+} drmp3_config;
+
+typedef struct
+{
+    drmp3_uint32 channels;
+    drmp3_uint32 sampleRate;
+    ...;
+} drmp3;
+
+typedef struct {
+    ...;
+} drmp3_allocation_callbacks;
+
+drmp3_bool32 drmp3_init_memory(drmp3* pMP3, const void* pData, size_t dataSize, const drmp3_allocation_callbacks* pAllocationCallbacks);
+drmp3_bool32 drmp3_init_file(drmp3* pMP3, const char* filePath, const drmp3_allocation_callbacks* pAllocationCallbacks);
+void drmp3_uninit(drmp3* pMP3);
+
+drmp3_uint64 drmp3_read_pcm_frames_f32(drmp3* pMP3, drmp3_uint64 framesToRead, float* pBufferOut);
+drmp3_uint64 drmp3_read_pcm_frames_s16(drmp3* pMP3, drmp3_uint64 framesToRead, drmp3_int16* pBufferOut);
+drmp3_bool32 drmp3_seek_to_pcm_frame(drmp3* pMP3, drmp3_uint64 frameIndex);
+drmp3_uint64 drmp3_get_pcm_frame_count(drmp3* pMP3);
+drmp3_uint64 drmp3_get_mp3_frame_count(drmp3* pMP3);
+drmp3_bool32 drmp3_get_mp3_and_pcm_frame_count(drmp3* pMP3, drmp3_uint64* pMP3FrameCount, drmp3_uint64* pPCMFrameCount);
+
+float* drmp3_open_memory_and_read_pcm_frames_f32(const void* pData, size_t dataSize, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
+drmp3_int16* drmp3_open_memory_and_read_pcm_frames_s16(const void* pData, size_t dataSize, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
+float* drmp3_open_file_and_read_pcm_frames_f32(const char* filePath, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
+drmp3_int16* drmp3_open_file_and_read_pcm_frames_s16(const char* filePath, drmp3_config* pConfig, drmp3_uint64* pTotalFrameCount, const drmp3_allocation_callbacks* pAllocationCallbacks);
+void drmp3_free(void* p, const drmp3_allocation_callbacks* pAllocationCallbacks);
+
+
+
+/********************** dr_wav **********************************/
+
+/* Common data formats. */
+#define DR_WAVE_FORMAT_PCM          0x1
+#define DR_WAVE_FORMAT_ADPCM        0x2
+#define DR_WAVE_FORMAT_IEEE_FLOAT   0x3
+#define DR_WAVE_FORMAT_ALAW         0x6
+#define DR_WAVE_FORMAT_MULAW        0x7
+#define DR_WAVE_FORMAT_DVI_ADPCM    0x11
+#define DR_WAVE_FORMAT_EXTENSIBLE   0xFFFE
+
+typedef   signed char           drwav_int8;
+typedef unsigned char           drwav_uint8;
+typedef   signed short          drwav_int16;
+typedef unsigned short          drwav_uint16;
+typedef   signed int            drwav_int32;
+typedef unsigned int            drwav_uint32;
+typedef   signed long long  drwav_int64;
+typedef unsigned long long  drwav_uint64;
+typedef drwav_uint8             drwav_bool8;
+typedef drwav_uint32            drwav_bool32;
+
+
+typedef struct
+{
+    drwav_uint32 sampleRate;
+    drwav_uint16 channels;
+    drwav_uint16 bitsPerSample;
+    drwav_uint16 translatedFormatTag;
+    drwav_uint64 totalPCMFrameCount;
+
+    ...;
+
+} drwav;
+
+typedef enum
+{
+    drwav_container_riff,
+    drwav_container_w64
+} drwav_container;
+
+typedef struct
+{
+    drwav_container container;  /* RIFF, W64. */
+    drwav_uint32 format;        /* DR_WAVE_FORMAT_* */
+    drwav_uint32 channels;
+    drwav_uint32 sampleRate;
+    drwav_uint32 bitsPerSample;
+} drwav_data_format;
+
+typedef struct {
+    ...;
+} drwav_allocation_callbacks;
+
+drwav_bool32 drwav_init_file(drwav* pWav, const char* filename, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_memory(drwav* pWav, const void* data, size_t dataSize, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_int32 drwav_uninit(drwav* pWav);
+void drwav_free(void* p, const drwav_allocation_callbacks* pAllocationCallbacks);
+
+drwav_bool32 drwav_init_file_write(drwav* pWav, const char* filename, const drwav_data_format* pFormat, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_file_write_sequential(drwav* pWav, const char* filename, const drwav_data_format* pFormat, drwav_uint64 totalSampleCount, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_file_write_sequential_pcm_frames(drwav* pWav, const char* filename, const drwav_data_format* pFormat, drwav_uint64 totalPCMFrameCount, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_memory_write(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_memory_write_sequential(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, drwav_uint64 totalSampleCount, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_bool32 drwav_init_memory_write_sequential_pcm_frames(drwav* pWav, void** ppData, size_t* pDataSize, const drwav_data_format* pFormat, drwav_uint64 totalPCMFrameCount, const drwav_allocation_callbacks* pAllocationCallbacks);
+
+
+drwav_uint64 drwav_read_pcm_frames(drwav* pWav, drwav_uint64 framesToRead, void* pBufferOut);
+drwav_uint64 drwav_write_pcm_frames(drwav* pWav, drwav_uint64 framesToWrite, const void* pData);
+drwav_bool32 drwav_seek_to_pcm_frame(drwav* pWav, drwav_uint64 targetFrameIndex);
+drwav_uint64 drwav_read_pcm_frames_s16(drwav* pWav, drwav_uint64 framesToRead, drwav_int16* pBufferOut);
+drwav_uint64 drwav_read_pcm_frames_f32(drwav* pWav, drwav_uint64 framesToRead, float* pBufferOut);
+drwav_uint64 drwav_read_pcm_frames_s32(drwav* pWav, drwav_uint64 framesToRead, drwav_int32* pBufferOut);
+
+drwav_int16* drwav_open_file_and_read_pcm_frames_s16(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+float* drwav_open_file_and_read_pcm_frames_f32(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_int32* drwav_open_file_and_read_pcm_frames_s32(const char* filename, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+
+drwav_int16* drwav_open_memory_and_read_pcm_frames_s16(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+float* drwav_open_memory_and_read_pcm_frames_f32(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+drwav_int32* drwav_open_memory_and_read_pcm_frames_s32(const void* data, size_t dataSize, unsigned int* channelsOut, unsigned int* sampleRateOut, drwav_uint64* totalFrameCountOut, const drwav_allocation_callbacks* pAllocationCallbacks);
+
 """
 
 # TODO: expose and support filter API,  expose and support waveform and noise generation APIs.
