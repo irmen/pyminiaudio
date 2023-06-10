@@ -306,3 +306,5 @@ def test_icecastclient_metadata_parsing():
     assert meta == {"StreamTitle": "title", "StreamUrl": "http://something.url"}
     meta = ic.parse_metadata("StreamTitle='title'with'quotes';StreamUrl='http://something.url';")
     assert meta == {"StreamTitle": "title'with'quotes", "StreamUrl": "http://something.url"}
+    meta = ic.parse_metadata("StreamTitle=TitlewithHTMLcodes&#39;and&#39;stuff;StreamUrl='http://something.url';")
+    assert meta == {"StreamTitle": "TitlewithHTMLcodes'and'stuff", "StreamUrl": "http://something.url"}

@@ -16,6 +16,7 @@ import array
 import urllib.request
 import inspect
 import time
+import html
 import threading
 from enum import Enum
 from typing import Generator, List, Dict, Set, Optional, Union, Any, Callable
@@ -1238,6 +1239,7 @@ class IceCastClient(StreamableSource):
     @staticmethod
     def parse_metadata(metadata: str) -> Dict[str, str]:
         meta = {}
+        metadata = html.unescape(metadata)
         for part in metadata.split(';'):
             key, _, value = part.partition('=')
             if key:
