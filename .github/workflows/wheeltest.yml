@@ -23,7 +23,7 @@ jobs:
           python-version: '3.10'
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.13.0
+        uses: pypa/cibuildwheel@v2.16
         env:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
