@@ -28,7 +28,7 @@ jobs:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
           CIBW_ARCHS_MACOS: 'x86_64 arm64'
-          CIBW_BUILD: 'cp39-* cp310-* cp311-*'
+          CIBW_BUILD: 'cp39-* cp310-* cp311-* cp312-*'
           CIBW_TEST_COMMAND_LINUX: "cd {project} && pytest -v tests/"
 
 
