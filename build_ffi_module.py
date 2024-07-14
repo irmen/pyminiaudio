@@ -392,15 +392,26 @@ typedef void (* ma_device_data_proc)(ma_device* pDevice, void* pOutput, const vo
 typedef void (* ma_stop_proc)(ma_device* pDevice);  /* DEPRECATED. Use ma_device_notification_proc instead. */
 typedef void (* ma_device_notification_proc)(const ma_device_notification* pNotification);
 
+struct ma_atomic_device_state {
+    ...;
+};
+
+struct ma_atomic_float {
+    ...;
+};
+
+typedef struct ma_atomic_float ma_atomic_float;
+typedef struct ma_atomic_device_state ma_atomic_device_state;
+
 
 struct ma_device {
 
     ma_context* pContext;
     ma_device_type type;
     ma_uint32 sampleRate;
-    volatile ma_device_state state;        /* The state of the device is variable and can change at any time on any thread. Must be used atomically. */
+    ma_atomic_device_state state;        /* The state of the device is variable and can change at any time on any thread. Must be used atomically. */
     void* pUserData;                        /* Application defined data. */
-    volatile float masterVolumeFactor;     /* Linear 0..1. Can be read and written simultaneously by different threads. Must be used atomically. */
+    ma_atomic_float masterVolumeFactor;     /* Linear 0..1. Can be read and written simultaneously by different threads. Must be used atomically. */
     ...;
     
 };
