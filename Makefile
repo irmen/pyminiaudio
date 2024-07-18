@@ -1,22 +1,23 @@
 .PHONY:  all win_dist dist upload
+PYTHON?=python3
 
 all:
 	@echo "Targets:  clean, test, docs, dist, win_wheels, linux_wheel, check_upload, upload"
 
 clean:
 	rm -f dist/* *.so *.pyd a.out
-	python setup.py clean --all
+	${PYTHON} setup.py clean --all
 
 test:
 	rm -f *.so *.pyd
-	python setup.py clean
-	python setup.py build
-	python setup.py test
-	python -m pytest -v tests
+	${PYTHON} setup.py clean
+	${PYTHON} setup.py build
+	${PYTHON} setup.py test
+	${PYTHON} -m pytest -v tests
 	# mypy --follow-imports skip miniaudio.py
 
 docs:
-	@python -c 'import setup; setup.make_md_docs("miniaudio")'
+	@${PYTHON} -c 'import setup; setup.make_md_docs("miniaudio")'
 
 win_wheels: test
 	cmd /C del /q dist\*
@@ -31,7 +32,7 @@ win_wheels: test
 
 linux_wheel: test
 	rm -f dist/* *.so
-	python setup.py bdist_wheel
+	${PYTHON} setup.py bdist_wheel
 	@echo
 	@echo
 	@echo "REMEMBER: the Linux wheel may be very system/cpu dependent so should you really use this? Beware."
@@ -39,8 +40,8 @@ linux_wheel: test
 
 dist: test
 	rm -f dist/* *.so
-	python setup.py clean
-	python setup.py sdist
+	${PYTHON} setup.py clean
+	${PYTHON} setup.py sdist
 
 upload: check_upload
 	twine upload dist/*
