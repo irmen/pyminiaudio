@@ -10,6 +10,7 @@ Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
 import os
+import sys
 import subprocess
 import shlex
 from cffi import FFI
@@ -873,7 +874,7 @@ __macros = [
     ("MA_NO_NODE_GRAPH", "1"),        # high level api
     ("MA_NO_ENGINE", "1")             # high level api
 ]
-if os.uname().sysname == "Darwin":
+if sys.platform == "darwin":
     __macros.insert(0,("MA_NO_RUNTIME_LINKING", None))
     __link_args=[
         '-Wl,-needed_framework,AudioToolbox'
