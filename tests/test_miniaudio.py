@@ -9,8 +9,10 @@ def dummy_generator():
 
 def test_devices():
     devs = miniaudio.Devices()
-    devs.get_playbacks()
-    devs.get_captures()
+    # devs.get_playbacks()
+    # devs.get_captures()
+    assert( not (devs.get_playbacks()[0]["name"].startswith("NULL") ) and 
+            not (devs.get_captures()[0]["name"].startswith("NULL")))
 
 
 # The device stop callback doesn't work consistently,
