@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.61"
+__version__ = "1.62.dev0"
 
 
 import abc
@@ -1403,8 +1403,9 @@ class AbstractDevice:
         """Start playback or capture, using the given callback generator (should already been started)"""
         if self.callback_generator:
             raise MiniaudioError("can't start an already started device")
-        if not inspect.isgenerator(callback_generator):
-            raise TypeError("callback must be a generator", type(callback_generator))
+        # This check fails on Cython... just skip it:
+        # if not inspect.isgenerator(callback_generator):
+        #    raise TypeError("callback must be a generator", type(callback_generator))
         self.callback_generator = callback_generator
         result = lib.ma_device_start(self._device)
         if result != lib.MA_SUCCESS:
