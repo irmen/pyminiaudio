@@ -21,14 +21,16 @@ docs:
 
 win_wheels: test
 	cmd /C del /q dist\*
-	py -3.7-64 setup.py clean --all
-	py -3.7-64 setup.py bdist_wheel
-	py -3.8-64 setup.py clean --all
-	py -3.8-64 setup.py bdist_wheel
 	py -3.9-64 setup.py clean --all
 	py -3.9-64 setup.py bdist_wheel
 	py -3.10-64 setup.py clean --all
 	py -3.10-64 setup.py bdist_wheel
+	py -3.11-64 setup.py clean --all
+	py -3.11-64 setup.py bdist_wheel
+	py -3.12-64 setup.py clean --all
+	py -3.12-64 setup.py bdist_wheel
+	py -3.13-64 setup.py clean --all
+	py -3.13-64 setup.py bdist_wheel
 
 linux_wheel: test
 	rm -f dist/* *.so
