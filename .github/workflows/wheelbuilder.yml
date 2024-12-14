@@ -32,13 +32,13 @@ jobs:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
           CIBW_ARCHS_MACOS: 'x86_64 arm64'
-          # CIBW_BUILD: 'cp39-* cp310-* cp311-* cp312-*'
+          # CIBW_BUILD: 'cp39-* cp310-* cp311-* cp312-* cp313-*'
           CIBW_SKIP: 'cp36-* cp37-*'
           CIBW_TEST_COMMAND_LINUX: "cd {project} && pytest -v tests/"
           # doesn't work?: CIBW_ENVIRONMENT_MACOS: 'CFLAGS="-DMA_NO_RUNTIME_LINKING  -framework AudioToolbox "'
 
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: pypi_artifacts
           path: ./wheelhouse/*.whl
@@ -57,7 +57,7 @@ jobs:
       - name: Build sdist
         run: python setup.py sdist
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: pypi_artifacts
           path: dist/*.tar.gz
@@ -68,12 +68,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: pypi_artifacts
           path: dist
 
-      - uses: pypa/gh-action-pypi-publish@v1.4.2
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_TEST_TOKEN }}
