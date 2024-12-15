@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pypi_artifacts_wheels
+          name: pypi_artifacts on ${{ matrix.os }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
