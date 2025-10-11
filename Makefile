@@ -12,7 +12,6 @@ test:
 	rm -f *.so *.pyd
 	${PYTHON} setup.py clean
 	${PYTHON} setup.py build
-	${PYTHON} setup.py test
 	${PYTHON} -m pytest -v tests
 	# mypy --follow-imports skip miniaudio.py
 
@@ -31,6 +30,8 @@ win_wheels: test
 	py -3.12-64 setup.py bdist_wheel
 	py -3.13-64 setup.py clean --all
 	py -3.13-64 setup.py bdist_wheel
+	py -3.14-64 setup.py clean --all
+	py -3.14-64 setup.py bdist_wheel
 
 linux_wheel: test
 	rm -f dist/* *.so
