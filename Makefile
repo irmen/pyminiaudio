@@ -10,8 +10,7 @@ clean:
 
 test:
 	rm -f *.so *.pyd
-	${PYTHON} setup.py clean
-	${PYTHON} setup.py build
+	${PYTHON} -m build
 	${PYTHON} -m pytest -v tests
 	# mypy --follow-imports skip miniaudio.py
 
@@ -20,8 +19,6 @@ docs:
 
 win_wheels: test
 	cmd /C del /q dist\*
-	py -3.9-64 setup.py clean --all
-	py -3.9-64 setup.py bdist_wheel
 	py -3.10-64 setup.py clean --all
 	py -3.10-64 setup.py bdist_wheel
 	py -3.11-64 setup.py clean --all
@@ -35,7 +32,7 @@ win_wheels: test
 
 linux_wheel: test
 	rm -f dist/* *.so
-	${PYTHON} setup.py bdist_wheel
+	${PYTHON} -m build --wheel
 	@echo
 	@echo
 	@echo "REMEMBER: the Linux wheel may be very system/cpu dependent so should you really use this? Beware."
@@ -43,8 +40,7 @@ linux_wheel: test
 
 dist: test
 	rm -f dist/* *.so
-	${PYTHON} setup.py clean
-	${PYTHON} setup.py sdist
+	${PYTHON} -m build --sdist
 
 upload: check_upload
 	twine upload dist/*
