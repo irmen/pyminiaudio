@@ -29,7 +29,9 @@ This is a Pythonic interface to the cross-platform [miniaudio](https://github.co
 - TODO: filters, waveform generators?
 
 
-*Requires Python 3.6 or newer.  Also works on pypy3 (because it uses cffi).*
+*Requires Python 3.10 or newer.  Also works on pypy3 (because it uses cffi).*
+
+*The miniaudio C library version is 0.11.25.*
 
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
@@ -92,6 +94,7 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 ### Note: everything below is automatically generated from comments in the source code files. Do not edit in this readme directly.
 
+
 *enum class*  ``Backend``
  names:  ``WASAPI`` ``DSOUND`` ``WINMM`` ``COREAUDIO`` ``SNDIO`` ``AUDIO4`` ``OSS`` ``PULSEAUDIO`` ``ALSA`` ``JACK`` ``AAUDIO`` ``OPENSL`` ``WEBAUDIO`` ``CUSTOM`` ``NULL``
 > Operating system audio backend to use (only a subset will be available)
@@ -123,7 +126,7 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 
 *enum class*  ``SeekOrigin``
- names:  ``START`` ``CURRENT``
+ names:  ``START`` ``CURRENT`` ``END``
 > How to seek() in a source
 
 
@@ -271,7 +274,7 @@ amount. This is particularly useful to plug this stream into an audio device cal
 variable number of frames per call.
 
 
-*function*  ``stream_raw_pcm_memory  (pcmdata: Union[array.array, memoryview, bytes], nchannels: int, sample_width: int, frames_to_read: int = 4096) -> Generator[Union[bytes, array.array], int, NoneType]``
+*function*  ``stream_raw_pcm_memory  (pcmdata: array.array | memoryview | bytes, nchannels: int, sample_width: int, frames_to_read: int = 4096) -> Generator[bytes | array.array, int, NoneType]``
 > Convenience generator function to stream raw pcm audio data from memory. Usually you don't need to
 use this as the library provides many other streaming options that work on much smaller, encoded,
 audio data. However, in the odd case that you only have already decoded raw pcm data you can use
@@ -280,7 +283,7 @@ this generator as a stream source.  The data can be provided in ``array`` type o
 the audio data has, and the sample with in bytes.
 
 
-*function*  ``stream_with_callbacks  (sample_stream: Generator[Union[bytes, array.array], int, NoneType], progress_callback: Optional[Callable[[int], NoneType]] = None, frame_process_method: Optional[Callable[[Union[bytes, array.array]], Union[bytes, array.array]]] = None, end_callback: Optional[Callable] = None) -> Generator[Union[bytes, array.array], int, NoneType]``
+*function*  ``stream_with_callbacks  (sample_stream: Generator[bytes | array.array, int, NoneType], progress_callback: Callable[[int], NoneType] | None = None, frame_process_method: Callable[[bytes | array.array], bytes | array.array] | None = None, end_callback: Callable | None = None) -> Generator[bytes | array.array, int, NoneType]``
 > Convenience generator function to add callback and processing functionality to another stream. You
 can specify : > A callback function that gets called during play and takes an int for the number of
 frames played.  > A function that can be used to process raw data frames before they are yielded
@@ -359,14 +362,14 @@ stream_file() instead.
 
 *class*  ``CaptureDevice``
 
-``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Optional[_cffi_backend._CDataBase] = None, callback_periods: int = 0, backends: Optional[List[miniaudio.Backend]] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``CaptureDevice  (self, input_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: _cffi_backend._CDataBase | None = None, callback_periods: int = 0, backends: List[miniaudio.Backend] | None = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio capture (recording).
 
 > *method*  ``close  (self) ``
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
-> *method*  ``start  (self, callback_generator: Generator[NoneType, Union[bytes, array.array], NoneType]) ``
+> *method*  ``start  (self, callback_generator: Generator[NoneType, bytes | array.array, NoneType]) ``
 > > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
 callback generator as raw bytes. (it should already be started before)
 
@@ -388,7 +391,7 @@ callback generator as raw bytes. (it should already be started before)
 
 *class*  ``Devices``
 
-``Devices  (self, backends: Optional[List[miniaudio.Backend]] = None) ``
+``Devices  (self, backends: List[miniaudio.Backend] | None = None) ``
 > Query the audio playback and record devices that miniaudio provides
 
 > *method*  ``get_captures  (self) -> List[Dict[str, Any]]``
@@ -400,14 +403,14 @@ callback generator as raw bytes. (it should already be started before)
 
 *class*  ``DuplexStream``
 
-``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: Optional[_cffi_backend._CDataBase] = None, capture_device_id: Optional[_cffi_backend._CDataBase] = None, callback_periods: int = 0, backends: Optional[List[miniaudio.Backend]] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``DuplexStream  (self, playback_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, playback_channels: int = 2, capture_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, capture_channels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, playback_device_id: _cffi_backend._CDataBase | None = None, capture_device_id: _cffi_backend._CDataBase | None = None, callback_periods: int = 0, backends: List[miniaudio.Backend] | None = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > Joins a capture device and a playback device.
 
 > *method*  ``close  (self) ``
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
-> *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], Union[bytes, array.array], NoneType]) ``
+> *method*  ``start  (self, callback_generator: Generator[bytes | array.array, bytes | array.array, NoneType]) ``
 > > Start the audio device: playback and capture begin. The audio data for playback is provided by
 the given callback generator, which is sent the recorded audio data at the same time. (it should
 already be started before passing it in)
@@ -446,14 +449,14 @@ give the file type to a decoder upfront. You can ignore this method then.
 
 *class*  ``PlaybackDevice``
 
-``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: Optional[_cffi_backend._CDataBase] = None, callback_periods: int = 0, backends: Optional[List[miniaudio.Backend]] = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
+``PlaybackDevice  (self, output_format: miniaudio.SampleFormat = <SampleFormat.SIGNED16: 2>, nchannels: int = 2, sample_rate: int = 44100, buffersize_msec: int = 200, device_id: _cffi_backend._CDataBase | None = None, callback_periods: int = 0, backends: List[miniaudio.Backend] | None = None, thread_prio: miniaudio.ThreadPriority = <ThreadPriority.HIGHEST: 0>, app_name: str = '') ``
 > An audio device provided by miniaudio, for audio playback.
 
 > *method*  ``close  (self) ``
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
-> *method*  ``start  (self, callback_generator: Generator[Union[bytes, array.array], int, NoneType]) ``
+> *method*  ``start  (self, callback_generator: Generator[bytes | array.array, int, NoneType]) ``
 > > Start the audio device: playback begins. The audio data is provided by the given callback
 generator. The generator gets sent the required number of frames and should yield the sample data as
 raw bytes, a memoryview, an array.array, or as a numpy array with shape (numframes, numchannels).
@@ -478,7 +481,7 @@ close().
 > *method*  ``close  (self) ``
 > > Override this to properly close the stream and free resources.
 
-> *method*  ``read  (self, num_bytes: int) -> Union[bytes, memoryview]``
+> *method*  ``read  (self, num_bytes: int) -> bytes | memoryview``
 > > override this to provide data bytes to the consumer of the stream
 
 > *method*  ``seek  (self, offset: int, origin: miniaudio.SeekOrigin) -> bool``
@@ -488,14 +491,13 @@ give the file type to a decoder upfront. You can ignore this method then.
 
 *class*  ``WavFileReadStream``
 
-``WavFileReadStream  (self, pcm_sample_gen: Generator[Union[bytes, array.array], int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) ``
+``WavFileReadStream  (self, pcm_sample_gen: Generator[bytes | array.array, int, NoneType], sample_rate: int, nchannels: int, output_format: miniaudio.SampleFormat, max_frames: int = 0) ``
 > An IO stream that reads as a .wav file, and which gets its pcm samples from the provided producer
 
 > *method*  ``close  (self) ``
 > > Close the file
 
-> *method*  ``read  (self, amount: int = 9223372036854775807) -> Optional[bytes]``
+> *method*  ``read  (self, amount: int = 9223372036854775807) -> bytes | None``
 > > Read up to the given amount of bytes from the file.
-
 
 

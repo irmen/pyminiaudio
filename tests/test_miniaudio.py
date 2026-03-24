@@ -82,6 +82,7 @@ def test_devices():
 def test_cffi_api_calls_parameters_correct():
     import ast
     import inspect
+
     cffi_module = miniaudio
     tree = ast.parse(inspect.getsource(cffi_module))
     errors = []
@@ -94,13 +95,28 @@ def test_cffi_api_calls_parameters_correct():
                     try:
                         cffi_func = getattr(cffi_module.lib, node.func.attr)
                     except AttributeError:
-                        errors.append(AttributeError("calling undefined cffi function: lib.{}  at line {} col {} of {}"
-                                                     .format(node.func.attr, lineno, column, cffi_module.__file__)))
+                        errors.append(
+                            AttributeError(
+                                "calling undefined cffi function: lib.{}  at line {} col {} of {}".format(
+                                    node.func.attr, lineno, column, cffi_module.__file__
+                                )
+                            )
+                        )
                     else:
                         ftype = cffi_module.ffi.typeof(cffi_func)
                         if len(node.args) != len(ftype.args):
-                            errors.append(TypeError("cffi function lib.{} expected {} args, called with {} args  at line {} col {} of {}"
-                                            .format(node.func.attr, len(ftype.args), len(node.args), lineno, column, cffi_module.__file__)))
+                            errors.append(
+                                TypeError(
+                                    "cffi function lib.{} expected {} args, called with {} args  at line {} col {} of {}".format(
+                                        node.func.attr,
+                                        len(ftype.args),
+                                        len(node.args),
+                                        lineno,
+                                        column,
+                                        cffi_module.__file__,
+                                    )
+                                )
+                            )
     if errors:
         raise TypeError(errors)
 
@@ -238,7 +254,12 @@ def test_wav_read():
 
 def test_decode():
     data = load_sample("test.ogg")
-    decoded = miniaudio.decode(data, miniaudio.SampleFormat.FLOAT32, sample_rate=32000, dither=miniaudio.DitherMode.TRIANGLE)
+    decoded = miniaudio.decode(
+        data,
+        miniaudio.SampleFormat.FLOAT32,
+        sample_rate=32000,
+        dither=miniaudio.DitherMode.TRIANGLE,
+    )
     assert decoded.sample_format == miniaudio.SampleFormat.FLOAT32
     assert decoded.sample_rate == 32000
     assert decoded.num_frames > 200000
@@ -247,7 +268,7 @@ def test_decode():
 def test_version():
     ver = miniaudio.lib_version()
     assert len(ver) > 3
-    assert '.' in ver
+    assert "." in ver
 
 
 def test_is_backend_enabled():
@@ -304,7 +325,243 @@ def test_icecastclient_metadata_parsing():
     assert meta == {"StreamTitle": "title", "StreamUrl": "http://something.url"}
     meta = ic.parse_metadata("StreamTitle='title';StreamUrl='http://something.url';")
     assert meta == {"StreamTitle": "title", "StreamUrl": "http://something.url"}
-    meta = ic.parse_metadata("StreamTitle='title'with'quotes';StreamUrl='http://something.url';")
-    assert meta == {"StreamTitle": "title'with'quotes", "StreamUrl": "http://something.url"}
-    meta = ic.parse_metadata("StreamTitle=TitlewithHTMLcodes&#39;and&#39;stuff;StreamUrl='http://something.url';")
-    assert meta == {"StreamTitle": "TitlewithHTMLcodes'and'stuff", "StreamUrl": "http://something.url"}
+    meta = ic.parse_metadata(
+        "StreamTitle='title'with'quotes';StreamUrl='http://something.url';"
+    )
+    assert meta == {
+        "StreamTitle": "title'with'quotes",
+        "StreamUrl": "http://something.url",
+    }
+    meta = ic.parse_metadata(
+        "StreamTitle=TitlewithHTMLcodes&#39;and&#39;stuff;StreamUrl='http://something.url';"
+    )
+    assert meta == {
+        "StreamTitle": "TitlewithHTMLcodes'and'stuff",
+        "StreamUrl": "http://something.url",
+    }
+
+
+def test_flac_read_file_s16():
+    sound = miniaudio.flac_read_file_s16("tests/audio/test.flac")
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_flac_read_file_s32():
+    sound = miniaudio.flac_read_file_s32("tests/audio/test.flac")
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED32
+
+
+def test_mp3_read_file_s16():
+    sound = miniaudio.mp3_read_file_s16("tests/audio/test.mp3")
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 200000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_wav_read_file_s16():
+    sound = miniaudio.wav_read_file_s16("tests/audio/test.wav")
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_wav_read_file_s32():
+    sound = miniaudio.wav_read_file_s32("tests/audio/test.wav")
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED32
+
+
+def test_flac_read_memory():
+    data = load_sample("test.flac")
+    sound = miniaudio.flac_read_f32(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
+
+
+def test_mp3_read_memory():
+    data = load_sample("test.mp3")
+    sound = miniaudio.mp3_read_f32(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 200000
+    assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
+
+
+def test_wav_read_memory():
+    data = load_sample("test.wav")
+    sound = miniaudio.wav_read_f32(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
+
+
+def test_vorbis_read_memory():
+    data = load_sample("test.ogg")
+    sound = miniaudio.vorbis_read(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 200000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_convert_frames():
+    data = load_sample("test.wav")
+    sound = miniaudio.wav_read_f32(data)
+    converted = miniaudio.convert_frames(
+        miniaudio.SampleFormat.FLOAT32,
+        sound.nchannels,
+        sound.sample_rate,
+        bytes(sound.samples),
+        miniaudio.SampleFormat.SIGNED16,
+        sound.nchannels,
+        sound.sample_rate,
+    )
+    assert isinstance(converted, (bytes, bytearray))
+    assert len(converted) == sound.num_frames * sound.nchannels * 2
+
+
+def test_decode_file():
+    sound = miniaudio.decode_file(
+        "tests/audio/test.mp3", miniaudio.SampleFormat.FLOAT32
+    )
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 44100
+    assert sound.num_frames > 400000
+    assert sound.sample_format == miniaudio.SampleFormat.FLOAT32
+
+
+def test_wav_write_file(tmp_path):
+    sound = miniaudio.wav_read_file_f32("tests/audio/test.wav")
+    output_file = tmp_path / "output.wav"
+    miniaudio.wav_write_file(str(output_file), sound)
+    assert output_file.exists()
+    reloaded = miniaudio.wav_read_file_f32(str(output_file))
+    assert reloaded.nchannels == sound.nchannels
+    assert reloaded.sample_rate == sound.sample_rate
+    assert reloaded.num_frames == sound.num_frames
+
+
+def test_wav_read_memory_s16():
+    data = load_sample("test.wav")
+    sound = miniaudio.wav_read_s16(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_wav_read_memory_s32():
+    data = load_sample("test.wav")
+    sound = miniaudio.wav_read_s32(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED32
+
+
+def test_mp3_read_memory_s16():
+    data = load_sample("test.mp3")
+    sound = miniaudio.mp3_read_s16(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 200000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_flac_read_memory_s16():
+    data = load_sample("test.flac")
+    sound = miniaudio.flac_read_s16(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED16
+
+
+def test_flac_read_memory_s32():
+    data = load_sample("test.flac")
+    sound = miniaudio.flac_read_s32(data)
+    assert sound.nchannels == 2
+    assert sound.sample_rate == 22050
+    assert sound.num_frames > 20000
+    assert sound.sample_format == miniaudio.SampleFormat.SIGNED32
+
+
+def test_wav_get_file_info():
+    info = miniaudio.wav_get_file_info("tests/audio/test.wav")
+    assert info.file_format == miniaudio.FileFormat.WAV
+    assert info.sample_rate == 22050
+    assert info.num_frames > 20000
+
+
+def test_mp3_get_file_info():
+    info = miniaudio.mp3_get_file_info("tests/audio/test.mp3")
+    assert info.file_format == miniaudio.FileFormat.MP3
+    assert info.sample_rate == 22050
+    assert info.num_frames > 200000
+
+
+def test_flac_get_file_info():
+    info = miniaudio.flac_get_file_info("tests/audio/test.flac")
+    assert info.file_format == miniaudio.FileFormat.FLAC
+    assert info.sample_rate == 22050
+    assert info.num_frames > 20000
+
+
+def test_vorbis_get_file_info():
+    info = miniaudio.vorbis_get_file_info("tests/audio/test.ogg")
+    assert info.file_format == miniaudio.FileFormat.VORBIS
+    assert info.sample_rate == 22050
+    assert info.num_frames > 200000
+
+
+def test_get_file_info():
+    info = miniaudio.get_file_info("tests/audio/test.wav")
+    assert info.file_format == miniaudio.FileFormat.WAV
+
+
+def test_convert_sample_format():
+    data = load_sample("test.wav")
+    sound = miniaudio.wav_read_f32(data)
+    converted = miniaudio.convert_sample_format(
+        miniaudio.SampleFormat.FLOAT32,
+        bytes(sound.samples),
+        miniaudio.SampleFormat.SIGNED16,
+        miniaudio.DitherMode.NONE,
+    )
+    assert isinstance(converted, (bytes, bytearray))
+    assert len(converted) == sound.num_frames * sound.nchannels * 2
+
+
+def test_wavfilereadstream(tmp_path):
+    import array
+
+    output_file = tmp_path / "output.wav"
+
+    def sample_generator():
+        for _ in range(1024):
+            yield array.array("h", [0, 0])
+
+    with open(str(output_file), "wb") as f:
+        stream = miniaudio.WavFileReadStream(
+            sample_generator(), 44100, 2, miniaudio.SampleFormat.SIGNED16
+        )
+        f.write(stream.read())
+        stream.close()
+
+    assert output_file.exists()
+    info = miniaudio.wav_get_file_info(str(output_file))
+    assert info.sample_rate == 44100
+    assert info.nchannels == 2
