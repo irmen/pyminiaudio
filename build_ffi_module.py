@@ -392,6 +392,12 @@ typedef void (* ma_device_data_proc)(ma_device* pDevice, void* pOutput, const vo
 typedef void (* ma_stop_proc)(ma_device* pDevice);  /* DEPRECATED. Use ma_device_notification_proc instead. */
 typedef void (* ma_device_notification_proc)(const ma_device_notification* pNotification);
 
+typedef void (* ma_log_callback_proc)(void* pUserData, ma_uint32 level, const char* pMessage);
+
+typedef ma_result (* ma_read_proc)(void* pUserData, void* pBufferOut, size_t bytesToRead, size_t* pBytesRead);
+typedef ma_result (* ma_seek_proc)(void* pUserData, ma_int64 offset, ma_seek_origin origin);
+typedef ma_result (* ma_tell_proc)(void* pUserData, ma_int64* pCursor);
+
 struct ma_atomic_device_state {
     ...;
 };
@@ -839,23 +845,27 @@ def check_linker_need_libatomic():
     Test if linker on system needs libatomic.
     This has been copied from https://github.com/grpc/grpc/blob/master/setup.py#L205
     """
-    code_test = (b'#include <atomic>\n' +
-                 b'int main() { return std::atomic<int64_t>{}; }')
-    cxx = shlex.split(os.environ.get('CXX', 'c++'))
-    cpp_test = subprocess.Popen(cxx + ['-x', 'c++', '-std=c++14', '-'],
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+    code_test = (
+        b"#include <atomic>\n" + b"int main() { return std::atomic<int64_t>{}; }"
+    )
+    cxx = shlex.split(os.environ.get("CXX", "c++"))
+    cpp_test = subprocess.Popen(
+        cxx + ["-x", "c++", "-std=c++14", "-"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     cpp_test.communicate(input=code_test)
     if cpp_test.returncode == 0:
         return False
     # Double-check to see if -latomic actually can solve the problem.
     # https://github.com/grpc/grpc/issues/22491
-    cpp_test = subprocess.Popen(cxx +
-                                ['-x', 'c++', '-std=c++14', '-', '-latomic'],
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+    cpp_test = subprocess.Popen(
+        cxx + ["-x", "c++", "-std=c++14", "-", "-latomic"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     cpp_test.communicate(input=code_test)
     return cpp_test.returncode == 0
 
@@ -868,21 +878,21 @@ if os.name == "posix":
     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
         compiler_args += shlex.split(os.environ.get("PYMINIAUDIO_EXTRA_CFLAGS", ""))
 __macros = [
-    ("MA_NO_GENERATION", "1"),        # waveform generation
-    ("MA_NO_ENCODING", "1"),          # audio encoding
+    ("MA_NO_GENERATION", "1"),  # waveform generation
+    ("MA_NO_ENCODING", "1"),  # audio encoding
     ("MA_NO_RESOURCE_MANAGER", "1"),  # high level api
-    ("MA_NO_NODE_GRAPH", "1"),        # high level api
-    ("MA_NO_ENGINE", "1")             # high level api
+    ("MA_NO_NODE_GRAPH", "1"),  # high level api
+    ("MA_NO_ENGINE", "1"),  # high level api
 ]
 if sys.platform == "darwin":
-    __macros.insert(0,("MA_NO_RUNTIME_LINKING", None))
-    __link_args=[
-        '-Wl,-needed_framework,AudioToolbox'
-    ]
+    __macros.insert(0, ("MA_NO_RUNTIME_LINKING", None))
+    __link_args = ["-Wl,-needed_framework,AudioToolbox"]
 else:
-    __link_args=""
-    
-ffibuilder.set_source("_miniaudio", """
+    __link_args = ""
+
+ffibuilder.set_source(
+    "_miniaudio",
+    """
     #include <stdint.h>
     #include <stdlib.h>
 
@@ -897,13 +907,13 @@ ffibuilder.set_source("_miniaudio", """
     void init_miniaudio(void);
 
 """,
-                      sources=["miniaudio.c"],
-                      include_dirs=[miniaudio_include_dir],
-                      libraries=libraries,
-                      extra_compile_args=compiler_args,
-                      extra_link_args=__link_args,
-                      define_macros=__macros,
-                    )
+    sources=["miniaudio.c"],
+    include_dirs=[miniaudio_include_dir],
+    libraries=libraries,
+    extra_compile_args=compiler_args,
+    extra_link_args=__link_args,
+    define_macros=__macros,
+)
 
 
 if __name__ == "__main__":

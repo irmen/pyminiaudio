@@ -6,6 +6,38 @@ requires = [
     "cffi>=1.12.0"
 ]
 
-
 build-backend = "setuptools.build_meta"
 
+
+[project]
+name = "miniaudio"
+version = "1.62.dev0"
+description = "python bindings for the miniaudio library and its decoders (mp3, flac, ogg vorbis, wav)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Irmen de Jong", email = "irmen@razorvine.net"}
+]
+keywords = ["sound", "audio", "playback", "recording", "conversion", "decoding"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: C",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Multimedia :: Sound/Audio :: Capture/Recording",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
+]
+dependencies = ["cffi>=1.12.0"]
+
+[project.urls]
+Homepage = "https://github.com/irmen/pyminiaudio"
+
+[project.scripts]
+miniaudio-documentation = "setup:make_md_docs"
+
+[tool.setuptools.packages.find]
+include = ["miniaudio*"]
