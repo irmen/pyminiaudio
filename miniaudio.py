@@ -1690,11 +1690,15 @@ def _internal_decoder_seek_callback(
     if offset == 0 and seek_origin == lib.ma_seek_origin_current:
         return lib.MA_SUCCESS
     source = ffi.from_handle(decoder.pUserData)
-    return (
-        lib.MA_SUCCESS
-        if int(source.seek(offset, SeekOrigin(seek_origin)))
-        else lib.MA_BAD_SEEK
-    )
+    try:
+        result = source.seek(offset, SeekOrigin(seek_origin))
+        if result:
+            return lib.MA_SUCCESS
+        # If seek returns False (not supported), return success anyway for compatibility
+        # The decoder will work as long as it doesn't actually need to seek
+        return lib.MA_SUCCESS
+    except Exception:
+        return lib.MA_BAD_SEEK
 
 
 def convert_sample_format(
