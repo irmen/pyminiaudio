@@ -418,8 +418,12 @@ def vorbis_stream_file(
 
 def flac_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (flac format)."""
-    filenamebytes = _get_filename_bytes(filename)
-    flac = lib.ma_dr_flac_open_file(filenamebytes, ffi.NULL)
+    if sys.platform == "win32":
+        filenamebytesw = _get_filename_bytes_w(filename)
+        flac = lib.ma_dr_flac_open_file_w(filenamebytesw, ffi.NULL)
+    else:
+        filenamebytes = _get_filename_bytes(filename)
+        flac = lib.ma_dr_flac_open_file(filenamebytes, ffi.NULL)
     if not flac:
         raise DecodeError("could not open/decode file")
     try:
@@ -594,8 +598,12 @@ def flac_stream_file(
     """Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
-    filenamebytes = _get_filename_bytes(filename)
-    flac = lib.ma_dr_flac_open_file(filenamebytes, ffi.NULL)
+    if sys.platform == "win32":
+        filenamebytesw = _get_filename_bytes_w(filename)
+        flac = lib.ma_dr_flac_open_file_w(filenamebytesw, ffi.NULL)
+    else:
+        filenamebytes = _get_filename_bytes(filename)
+        flac = lib.ma_dr_flac_open_file(filenamebytes, ffi.NULL)
     if not flac:
         raise DecodeError("could not open/decode file")
     if seek_frame > 0:
@@ -623,9 +631,14 @@ def flac_stream_file(
 
 def mp3_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (mp3 format)."""
-    filenamebytes = _get_filename_bytes(filename)
     with ffi.new("ma_dr_mp3 *") as mp3:
-        if not lib.ma_dr_mp3_init_file(mp3, filenamebytes, ffi.NULL):
+        if sys.platform == "win32":
+            filenamebytesw = _get_filename_bytes_w(filename)
+            result = lib.ma_dr_mp3_init_file_w(mp3, filenamebytesw, ffi.NULL)
+        else:
+            filenamebytes = _get_filename_bytes(filename)
+            result = lib.ma_dr_mp3_init_file(mp3, filenamebytes, ffi.NULL)
+        if not result:
             raise DecodeError("could not open/decode file")
         try:
             num_frames = lib.ma_dr_mp3_get_pcm_frame_count(mp3)
@@ -772,9 +785,14 @@ def mp3_stream_file(
     """Streams the mp3 audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
-    filenamebytes = _get_filename_bytes(filename)
     with ffi.new("ma_dr_mp3 *") as mp3:
-        if not lib.ma_dr_mp3_init_file(mp3, filenamebytes, ffi.NULL):
+        if sys.platform == "win32":
+            filenamebytesw = _get_filename_bytes_w(filename)
+            result = lib.ma_dr_mp3_init_file_w(mp3, filenamebytesw, ffi.NULL)
+        else:
+            filenamebytes = _get_filename_bytes(filename)
+            result = lib.ma_dr_mp3_init_file(mp3, filenamebytes, ffi.NULL)
+        if not result:
             raise DecodeError("could not open/decode file")
         if seek_frame > 0:
             result = lib.ma_dr_mp3_seek_to_pcm_frame(mp3, seek_frame)
@@ -801,9 +819,15 @@ def mp3_stream_file(
 
 def wav_get_file_info(filename: str) -> SoundFileInfo:
     """Fetch some information about the audio file (wav format)."""
-    filenamebytes = _get_filename_bytes(filename)
     with ffi.new("ma_dr_wav*") as wav:
-        if not lib.ma_dr_wav_init_file(wav, filenamebytes, ffi.NULL):
+        if sys.platform == "win32":
+            # Windows filepaths with non-ascii characters fail to open using fopen, cast filenames to wchar_t*
+            filenamebytesw = _get_filename_bytes_w(filename)
+            result = lib.ma_dr_wav_init_file_w(wav, filenamebytesw, ffi.NULL)
+        else:
+            filenamebytes = _get_filename_bytes(filename)
+            result = lib.ma_dr_wav_init_file(wav, filenamebytes, ffi.NULL)
+        if not result:
             raise DecodeError("could not open/decode file")
         try:
             duration = wav.totalPCMFrameCount / wav.sampleRate
@@ -981,9 +1005,15 @@ def wav_stream_file(
     """Streams the WAV audio file as interleaved 16 bit signed integer sample arrays segments.
     This uses a fixed chunk size and cannot be used as a generic miniaudio decoder input stream.
     Consider using stream_file() instead."""
-    filenamebytes = _get_filename_bytes(filename)
     with ffi.new("ma_dr_wav*") as wav:
-        if not lib.ma_dr_wav_init_file(wav, filenamebytes, ffi.NULL):
+        if sys.platform == "win32":
+            # Windows filepaths with non-ascii characters fail to open using fopen, cast filenames to wchar_t*
+            filenamebytesw = _get_filename_bytes_w(filename)
+            result = lib.ma_dr_wav_init_file_w(wav, filenamebytesw, ffi.NULL)
+        else:
+            filenamebytes = _get_filename_bytes(filename)
+            result = lib.ma_dr_wav_init_file(wav, filenamebytes, ffi.NULL)
+        if not result:
             raise DecodeError("could not open/decode file")
         if seek_frame > 0:
             result = lib.ma_dr_wav_seek_to_pcm_frame(wav, seek_frame)
@@ -1043,6 +1073,13 @@ def _get_filename_bytes(filename: str) -> bytes:
     if not os.path.isfile(filename2):
         raise FileNotFoundError(filename)
     return filename2.encode(sys.getfilesystemencoding())
+
+
+def _get_filename_bytes_w(filename: str):
+    filename2 = os.path.expanduser(filename)
+    if not os.path.isfile(filename2):
+        raise FileNotFoundError(filename)
+    return ffi.new("wchar_t[]", filename2)
 
 
 class Devices:
@@ -1326,15 +1363,21 @@ def stream_file(
     This is particularly useful to plug this stream into an audio device callback that
     wants a variable number of frames per call.
     """
-    filenamebytes = _get_filename_bytes(filename)
     decoder = ffi.new("ma_decoder *")
     decoder_config = lib.ma_decoder_config_init(
         output_format.value, nchannels, sample_rate
     )
     decoder_config.ditherMode = dither.value
-    result = lib.ma_decoder_init_file(
-        filenamebytes, ffi.addressof(decoder_config), decoder
-    )
+    if sys.platform == "win32":
+        filenamebytesw = _get_filename_bytes_w(filename)
+        result = lib.ma_decoder_init_file_w(
+            filenamebytesw, ffi.addressof(decoder_config), decoder
+        )
+    else:
+        filenamebytes = _get_filename_bytes(filename)
+        result = lib.ma_decoder_init_file(
+            filenamebytes, ffi.addressof(decoder_config), decoder
+        )
     if result != lib.MA_SUCCESS:
         raise DecodeError("failed to init decoder", result)
     if seek_frame > 0:

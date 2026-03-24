@@ -684,6 +684,7 @@ ma_dr_flac_uint64 ma_dr_flac_read_pcm_frames_s16(ma_dr_flac* pFlac, ma_dr_flac_u
 ma_dr_flac_uint64 ma_dr_flac_read_pcm_frames_f32(ma_dr_flac* pFlac, ma_dr_flac_uint64 framesToRead, float* pBufferOut);
 ma_dr_flac_bool32 ma_dr_flac_seek_to_pcm_frame(ma_dr_flac* pFlac, ma_dr_flac_uint64 pcmFrameIndex);
 ma_dr_flac* ma_dr_flac_open_file(const char* filename, const ma_allocation_callbacks* pAllocationCallbacks);
+ma_dr_flac* ma_dr_flac_open_file_w(const wchar_t* pFileName, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_flac* ma_dr_flac_open_memory(const void* data, size_t dataSize, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_flac_int32* ma_dr_flac_open_file_and_read_pcm_frames_s32(const char* filename, unsigned int* channels, unsigned int* sampleRate, ma_dr_flac_uint64* totalPCMFrameCount, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_flac_int16* ma_dr_flac_open_file_and_read_pcm_frames_s16(const char* filename, unsigned int* channels, unsigned int* sampleRate, ma_dr_flac_uint64* totalPCMFrameCount, const ma_allocation_callbacks* pAllocationCallbacks);
@@ -723,6 +724,7 @@ typedef struct
 
 ma_dr_mp3_bool32 ma_dr_mp3_init_memory(ma_dr_mp3* pMP3, const void* pData, size_t dataSize, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_mp3_bool32 ma_dr_mp3_init_file(ma_dr_mp3* pMP3, const char* filePath, const ma_allocation_callbacks* pAllocationCallbacks);
+ma_dr_mp3_bool32 ma_dr_mp3_init_file_w(ma_dr_mp3* pMP3, const wchar_t* pFilePath, const ma_allocation_callbacks* pAllocationCallbacks);
 void ma_dr_mp3_uninit(ma_dr_mp3* pMP3);
 
 ma_dr_mp3_uint64 ma_dr_mp3_read_pcm_frames_f32(ma_dr_mp3* pMP3, ma_dr_mp3_uint64 framesToRead, float* pBufferOut);
@@ -791,6 +793,7 @@ typedef struct
 } ma_dr_wav_data_format;
 
 ma_dr_wav_bool32 ma_dr_wav_init_file(ma_dr_wav* pWav, const char* filename, const ma_allocation_callbacks* pAllocationCallbacks);
+ma_dr_wav_bool32 ma_dr_wav_init_file_w(ma_dr_wav* pWav, const wchar_t* filename, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_wav_bool32 ma_dr_wav_init_memory(ma_dr_wav* pWav, const void* data, size_t dataSize, const ma_allocation_callbacks* pAllocationCallbacks);
 ma_dr_wav_int32 ma_dr_wav_uninit(ma_dr_wav* pWav);
 void ma_dr_wav_free(void* p, const ma_allocation_callbacks* pAllocationCallbacks);
