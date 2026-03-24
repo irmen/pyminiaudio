@@ -43,14 +43,44 @@ or my [mod player](https://pypi.org/project/libxmplite/) which uses libxmp.
 
 ## Examples
 
-### Most basic audio file playback
+### Basic audio file playback with info
 
 ```python
 import miniaudio
+
+# Get file info
+info = miniaudio.get_file_info("samples/music.mp3")
+print(f"Playing: {info.nchannels} channels, {info.sample_rate} Hz, {info.duration:.1f}s")
+
+# Stream and play
 stream = miniaudio.stream_file("samples/music.mp3")
 with miniaudio.PlaybackDevice() as device:
     device.start(stream)
-    input("Audio file playing in the background. Enter to stop playback: ")
+    input("Playing... press Enter to stop")
+```
+
+### Decode and convert audio file
+
+```python
+import miniaudio
+
+# Decode audio file to float32
+sound = miniaudio.decode_file("music.mp3", miniaudio.SampleFormat.FLOAT32)
+print(f"Decoded: {sound.nchannels} ch, {sound.sample_rate} Hz, {sound.num_frames} frames")
+
+# Convert to different format and sample rate
+converted = miniaudio.convert_frames(
+    sound.sample_format, sound.nchannels, sound.sample_rate,
+    sound.samples.tobytes(),
+    miniaudio.SampleFormat.SIGNED16, sound.nchannels, 22050
+)
+
+# Write to WAV file
+miniaudio.wav_write_file("output.wav", miniaudio.DecodedSoundFile(
+    "output.wav", sound.nchannels, 22050, miniaudio.SampleFormat.SIGNED16,
+    converted
+))
+print("Written to output.wav")
 ```
 
 ### Playback of an unsupported file format
