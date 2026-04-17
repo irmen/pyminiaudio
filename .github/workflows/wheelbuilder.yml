@@ -80,7 +80,7 @@ jobs:
           python-version: '3.14'
 
       - name: Build sdist
-        run: python setup.py sdist
+        run: pipx run build --sdist
 
       - uses: actions/upload-artifact@v5
         with:
