@@ -58,9 +58,8 @@ jobs:
         uses: pypa/cibuildwheel@v2.21.3
         env:
           CIBW_BUILD: 'cp310-* cp311-* cp312-* cp313-* cp314-*'
-          CIBW_SKIP: '*-manylinux* *-win32 *-macosx* x86_64-apple-ios*'
-          CIBW_TARGET: 'ios'
-          CIBW_IOS_PLATFORM: 'iOS'
+          CIBW_SKIP: '*-manylinux* *-win32 *-macosx* x86_64_iphonesimulator*'
+          CIBW_PLATFORM: 'ios'
           CIBW_IOS_DEPLOYMENT_TARGET: '13.0'
 
       - uses: actions/upload-artifact@v5
