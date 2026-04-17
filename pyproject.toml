@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "miniaudio"
-version = "1.7"
+version = "1.70"
 description = "python bindings for the miniaudio library and its decoders (mp3, flac, ogg vorbis, wav)"
 readme = "README.md"
 requires-python = ">=3.8"
