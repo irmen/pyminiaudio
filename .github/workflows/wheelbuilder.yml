@@ -79,8 +79,11 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Install build
+        run: pip install build
+
       - name: Build sdist
-        run: pipx run build --sdist
+        run: python -m build --sdist
 
       - uses: actions/upload-artifact@v5
         with:
