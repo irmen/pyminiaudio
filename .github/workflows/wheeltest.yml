@@ -15,7 +15,7 @@ jobs:
           os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         name: Install Python
@@ -23,7 +23,7 @@ jobs:
           python-version: '3.14'
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.21.3
+        uses: pypa/cibuildwheel@v3
         env:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
@@ -32,7 +32,7 @@ jobs:
           CIBW_TEST_COMMAND_LINUX: "cd {project} && pytest -v tests/"
 
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: pypi_artifacts on ${{ matrix.os }}
           path: ./wheelhouse/*.whl
