@@ -19,6 +19,16 @@ if __name__ == "__main__":
     #  ctx.check_hostname = False
     #  ctx.verify_mode = ssl.CERT_NONE
     # and then create the IceCastClient with ssl_context=ctx
+
+    # you can optionally pass a urllib.request.BaseHandler in the 'proxy' keyword
+    # argument, to route requests through a proxy. For HTTP(S) proxies you can
+    # pass a URL string (e.g. proxy="http://proxy.example:8080"). For SOCKS
+    # proxies, use PySocks (pip install PySocks):
+    #
+    #  import sockshandler, socks
+    #  handler = sockshandler.SocksiPyHandler(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 9999)
+    #  source = miniaudio.IceCastClient(url, proxy=handler)
+
     source = miniaudio.IceCastClient(url, update_stream_title=title_printer, ssl_context=None)
     print("Connected to internet stream, audio format:", source.audio_format.name)
     print("Station name: ", source.station_name)

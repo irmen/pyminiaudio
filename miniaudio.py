@@ -1837,6 +1837,7 @@ class IceCastClient(StreamableSource):
         url: str,
         update_stream_title: Callable[["IceCastClient", str], None] = None,
         ssl_context: "ssl.SSLContext" = None,
+        proxy: Union[str, urllib.request.BaseHandler, None] = None,
     ) -> None:
         self.url = url
         self.stream_title = "???"
@@ -1849,8 +1850,17 @@ class IceCastClient(StreamableSource):
         self._buffer = b""
         self._buffer_lock = threading.Lock()
         self._update_title = update_stream_title
+        handlers = []
+        if proxy:
+            if isinstance(proxy, str):
+                handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+            else:
+                handlers.append(proxy)
+        if ssl_context:
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_context))
+        self._opener = urllib.request.build_opener(*handlers)
         req = urllib.request.Request(url, headers={"icy-metadata": "1"})
-        with urllib.request.urlopen(req, context=ssl_context) as result:
+        with self._opener.open(req, timeout=10) as result:
             self.station_genre = result.headers["icy-genre"]
             self.station_name = result.headers["icy-name"]
             self.audio_info = result.headers.get("ice-audio-info", "")
@@ -1903,7 +1913,7 @@ class IceCastClient(StreamableSource):
     def _download_stream(self) -> None:
         req = urllib.request.Request(self.url, headers={"icy-metadata": "1"})
         try:
-            with urllib.request.urlopen(req) as result:
+            with self._opener.open(req, timeout=10) as result:
                 if "icy-metaint" in result.headers:
                     meta_interval = int(result.headers["icy-metaint"])
                 else:
@@ -2220,7 +2230,7 @@ class AbstractDevice:
 
         if result != lib.MA_SUCCESS:
             raise MiniaudioError("failed to set master volume", result)
-    
+
     def get_master_volume(self) -> float:
         """Get the master volume of the device. Returns a value between 0.0 and 1.0."""
         if self._device is None:
@@ -2231,7 +2241,7 @@ class AbstractDevice:
             if result != lib.MA_SUCCESS:
                 raise MiniaudioError("failed to get master volume", result)
             return volume[0]
-    
+
     def _stop_callback(self, device: ffi.CData) -> None:
         """Called when the device is stopped (i.e. device disconnect or manual stop) Doesn't work consistently however."""
         self.running = False
