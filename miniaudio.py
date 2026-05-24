@@ -128,7 +128,12 @@ GeneratorTypes = Union[
 
 
 class SoundFileInfo:
-    """Contains various properties of an audio file."""
+    """Contains various properties of an audio file.
+
+    Accessible attributes: name (str), nchannels (int), sample_rate (int),
+    sample_format (SampleFormat), sample_format_name (str), sample_width (int),
+    num_frames (int), duration (float), file_format (FileFormat), sub_format (int or None).
+    """
 
     def __init__(
         self,
@@ -172,7 +177,13 @@ class SoundFileInfo:
 
 
 class DecodedSoundFile(SoundFileInfo):
-    """Contains various properties and also the PCM frames of a fully decoded audio file."""
+    """Contains various properties and also the PCM frames of a fully decoded audio file.
+
+    Inherits all SoundFileInfo attributes (name, nchannels, sample_rate, sample_format,
+    sample_width, num_frames, duration, etc.) and adds .samples (array.array) which holds
+    the raw PCM data. The array type matches the sample format, e.g. array('h') for SIGNED16,
+    array('f') for FLOAT32, array('B') for UNSIGNED8, array('i') for SIGNED32.
+    """
 
     def __init__(
         self,

@@ -124,7 +124,6 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 
 ### Note: everything below is automatically generated from comments in the source code files. Do not edit in this readme directly.
 
-
 *enum class*  ``Backend``
  names:  ``WASAPI`` ``DSOUND`` ``WINMM`` ``COREAUDIO`` ``SNDIO`` ``AUDIO4`` ``OSS`` ``PULSEAUDIO`` ``ALSA`` ``JACK`` ``AAUDIO`` ``OPENSL`` ``WEBAUDIO`` ``CUSTOM`` ``NULL``
 > Operating system audio backend to use (only a subset will be available)
@@ -399,11 +398,11 @@ stream_file() instead.
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
-> *method*  ``start  (self, callback_generator: Generator[NoneType, array.array, NoneType]) ``
+> *method*  ``start  (self, callback_generator: Generator[NoneType, bytes | array.array, NoneType]) ``
 > > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
-callback generator as an ``array.array`` whose type matches the chosen sample format
-(e.g. ``array('h')`` for SIGNED16, ``array('f')`` for FLOAT32).
-(the generator should already be started before)
+callback generator as an array.array whose type matches the chosen sample format (e.g. array('h')
+for SIGNED16, array('f') for FLOAT32). For SIGNED24, the data is sent as raw bytes. (the generator
+should already be started before)
 
 > *method*  ``stop  (self) ``
 > > Halt playback or capture.
@@ -418,7 +417,11 @@ callback generator as an ``array.array`` whose type matches the chosen sample fo
 *class*  ``DecodedSoundFile``
 
 ``DecodedSoundFile  (self, name: str, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, samples: array.array) ``
-> Contains various properties and also the PCM frames of a fully decoded audio file.
+> Contains various properties and also the PCM frames of a fully decoded audio file.  Inherits all
+SoundFileInfo attributes (name, nchannels, sample_rate, sample_format, sample_width, num_frames,
+duration, etc.) and adds .samples (array.array) which holds the raw PCM data. The array type matches
+the sample format, e.g. array('h') for SIGNED16, array('f') for FLOAT32, array('B') for UNSIGNED8,
+array('i') for SIGNED32.
 
 
 *class*  ``Devices``
@@ -444,7 +447,8 @@ it will be closed automatically.
 
 > *method*  ``start  (self, callback_generator: Generator[bytes | array.array, bytes | array.array, NoneType]) ``
 > > Start the audio device: playback and capture begin. The audio data for playback is provided by
-the given callback generator, which is sent the recorded audio data at the same time. (it should
+the given callback generator, which is sent the recorded audio data as an array.array whose type
+matches the chosen capture format (e.g. array('h') for SIGNED16, array('f') for FLOAT32). (it should
 already be started before passing it in)
 
 > *method*  ``stop  (self) ``
@@ -501,7 +505,9 @@ The generator should already be started before passing it in.
 *class*  ``SoundFileInfo``
 
 ``SoundFileInfo  (self, name: str, file_format: miniaudio.FileFormat, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int, sub_format: int = None) ``
-> Contains various properties of an audio file.
+> Contains various properties of an audio file.  Accessible attributes: name (str), nchannels (int),
+sample_rate (int), sample_format (SampleFormat), sample_format_name (str), sample_width (int),
+num_frames (int), duration (float), file_format (FileFormat), sub_format (int or None).
 
 
 *class*  ``StreamableSource``
