@@ -1837,6 +1837,7 @@ class AbstractDevice:
         self.running = False
         self.stop_callback = None  # doesn't work consistently
         self._device = ffi.new("ma_device *")
+        self._context = None
 
     def __del__(self) -> None:
         self.close()
@@ -1881,6 +1882,9 @@ class AbstractDevice:
         if self._device is not None:
             lib.ma_device_uninit(self._device)
             self._device = None
+        if self._context is not None:
+            lib.ma_context_uninit(self._context)
+            self._context = None
         self.stop_callback = None
 
     def _stop_callback(self, device: ffi.CData) -> None:
