@@ -399,9 +399,11 @@ stream_file() instead.
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
-> *method*  ``start  (self, callback_generator: Generator[NoneType, bytes | array.array, NoneType]) ``
+> *method*  ``start  (self, callback_generator: Generator[NoneType, array.array, NoneType]) ``
 > > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
-callback generator as raw bytes. (it should already be started before)
+callback generator as an ``array.array`` whose type matches the chosen sample format
+(e.g. ``array('h')`` for SIGNED16, ``array('f')`` for FLOAT32).
+(the generator should already be started before)
 
 > *method*  ``stop  (self) ``
 > > Halt playback or capture.

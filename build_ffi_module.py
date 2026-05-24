@@ -441,6 +441,14 @@ typedef struct
     } nativeDataFormats[64];
 } ma_device_info;
 
+typedef enum
+{
+    ma_performance_profile_low_latency = 0,
+    ma_performance_profile_conservative
+} ma_performance_profile;
+
+typedef struct ma_resampler_config { ...; } ma_resampler_config;
+
 
 typedef struct
 {
@@ -450,10 +458,17 @@ typedef struct
     ma_uint32 periodSizeInFrames;
     ma_uint32 periodSizeInMilliseconds;
     ma_uint32 periods;
+    ma_performance_profile performanceProfile;
+    ma_bool8 noPreSilencedOutputBuffer;
+    ma_bool8 noClip;
+    ma_bool8 noDisableDenormals;
+    ma_bool8 noFixedSizedCallback;
     ma_device_data_proc dataCallback;
     ma_device_notification_proc notificationCallback;
     ma_stop_proc stopCallback;
     void* pUserData;
+    
+    ma_resampler_config resampling;
     
     struct
     {

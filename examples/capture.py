@@ -2,7 +2,6 @@
 Recording audio from a selected input device.
 """
 
-import array
 from time import sleep
 import miniaudio
 
@@ -30,17 +29,17 @@ if __name__ == "__main__":
     selected_device = choose_device()
     capture = miniaudio.CaptureDevice(buffersize_msec=1000, sample_rate=44100, device_id=selected_device["id"])
     generator = record_to_buffer()
-    print("Recording for 3 seconds")
+    print("Recording for 5 seconds")
     next(generator)
     capture.start(generator)
-    sleep(3)
+    sleep(5)
     capture.stop()
 
-    buffer = b"".join(buffer_chunks)
-    print("\nRecorded", len(buffer), "bytes")
-    print("Wring to ./capture.wav")
-    samples = array.array('h')
-    samples.frombytes(buffer)
+    samples = miniaudio._array_proto_from_format(capture.format)
+    for chunk in buffer_chunks:
+        samples.extend(chunk)
     sound = miniaudio.DecodedSoundFile('capture', capture.nchannels, capture.sample_rate, capture.format, samples)
+    print("\nRecorded sound info:", sound)
+    print("Wring to ./capture.wav")
     miniaudio.wav_write_file('capture.wav', sound)
-    print("Recording done")
+    print("done.")

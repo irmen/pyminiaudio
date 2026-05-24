@@ -5,7 +5,7 @@ Author: Irmen de Jong (irmen@razorvine.net)
 Software license: "MIT software license". See http://opensource.org/licenses/MIT
 """
 
-__version__ = "1.71"
+__version__ = "1.72"
 
 
 import abc
@@ -14,7 +14,6 @@ import os
 import io
 import array
 import urllib.request
-import inspect
 import time
 import html
 import threading
@@ -1042,11 +1041,13 @@ def wav_write_file(filename: str, sound: DecodedSoundFile) -> None:
     """Writes the pcm sound to a WAV file"""
     with ffi.new("ma_dr_wav_data_format*") as fmt, ffi.new("ma_dr_wav*") as pwav:
         fmt.container = lib.ma_dr_wav_container_riff
-        fmt.format = sound.sub_format or lib.MA_DR_WAVE_FORMAT_PCM
+        if sound.sample_format == SampleFormat.FLOAT32:
+            fmt.format = lib.MA_DR_WAVE_FORMAT_IEEE_FLOAT
+        else:
+            fmt.format = sound.sub_format or lib.MA_DR_WAVE_FORMAT_PCM
         fmt.channels = sound.nchannels
         fmt.sampleRate = sound.sample_rate
         fmt.bitsPerSample = sound.sample_width * 8
-        # what about floating point format?
         filename_bytes = filename.encode(sys.getfilesystemencoding())
         if not lib.ma_dr_wav_init_file_write_sequential(
             pwav, filename_bytes, fmt, sound.num_frames * sound.nchannels, ffi.NULL
@@ -1928,6 +1929,8 @@ class CaptureDevice(AbstractDevice):
         app_name: str = "",
     ) -> None:
         super().__init__()
+        if input_format == SampleFormat.SIGNED24:
+            raise MiniaudioError("SIGNED24 has no native Python array type; use a different format")
         self.format = input_format
         self.sample_width = width_from_format(input_format)
         self.nchannels = nchannels
@@ -1960,8 +1963,10 @@ class CaptureDevice(AbstractDevice):
 
     def start(self, callback_generator: CaptureCallbackGeneratorType) -> None:  # type: ignore
         """Start the audio device: capture (recording) begins.
-        The recorded audio data is sent to the given callback generator as raw bytes.
-        (it should already be started before)"""
+        The recorded audio data is sent to the given callback generator as an array.array
+        whose type matches the chosen sample format (e.g. array('h') for SIGNED16, array('f')
+        for FLOAT32). For SIGNED24, the data is sent as raw bytes.
+        (the generator should already be started before)"""
         return super().start(callback_generator)
 
     def _data_callback(
@@ -1971,8 +1976,10 @@ class CaptureDevice(AbstractDevice):
             buffer_size = self.sample_width * self.nchannels * framecount
             data = bytearray(buffer_size)
             ffi.memmove(data, input, buffer_size)
+            samples = _array_proto_from_format(self.format)
+            samples.frombytes(data)
             try:
-                self.callback_generator.send(data)
+                self.callback_generator.send(samples)
             except StopIteration:
                 self.callback_generator = None
                 return
@@ -2076,6 +2083,8 @@ class DuplexStream(AbstractDevice):
         app_name: str = "",
     ) -> None:
         super().__init__()
+        if capture_format == SampleFormat.SIGNED24:
+            raise MiniaudioError("SIGNED24 has no native Python array type; use a different format")
         self.capture_format = capture_format
         self.playback_format = playback_format
         self.sample_width = width_from_format(capture_format)
@@ -2114,7 +2123,8 @@ class DuplexStream(AbstractDevice):
     def start(self, callback_generator: DuplexCallbackGeneratorType) -> None:  # type: ignore
         """Start the audio device: playback and capture begin.
         The audio data for playback is provided by the given callback generator, which is sent the
-        recorded audio data at the same time.
+        recorded audio data as an array.array whose type matches the chosen capture format
+        (e.g. array('h') for SIGNED16, array('f') for FLOAT32).
         (it should already be started before passing it in)"""
         return super().start(callback_generator)
 
@@ -2125,8 +2135,10 @@ class DuplexStream(AbstractDevice):
         in_data = bytearray(buffer_size)
         ffi.memmove(in_data, input, buffer_size)
         if self.callback_generator:
+            samples = _array_proto_from_format(self.capture_format)
+            samples.frombytes(in_data)
             try:
-                out_data = self.callback_generator.send(in_data)
+                out_data = self.callback_generator.send(samples)
             except StopIteration:
                 self.callback_generator = None
                 return
