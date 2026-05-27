@@ -398,6 +398,12 @@ stream_file() instead.
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
+> *method*  ``get_master_volume  (self) -> float``
+> > Get the master volume of the device. Returns a value between 0.0 and 1.0.
+
+> *method*  ``set_master_volume  (self, volume: float) ``
+> > Set the master volume of the device. Volume should be between 0.0 and 1.0.
+
 > *method*  ``start  (self, callback_generator: Generator[NoneType, bytes | array.array, NoneType]) ``
 > > Start the audio device: capture (recording) begins. The recorded audio data is sent to the given
 callback generator as an array.array whose type matches the chosen sample format (e.g. array('h')
@@ -445,6 +451,12 @@ array('i') for SIGNED32.
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
 
+> *method*  ``get_master_volume  (self) -> float``
+> > Get the master volume of the device. Returns a value between 0.0 and 1.0.
+
+> *method*  ``set_master_volume  (self, volume: float) ``
+> > Set the master volume of the device. Volume should be between 0.0 and 1.0.
+
 > *method*  ``start  (self, callback_generator: Generator[bytes | array.array, bytes | array.array, NoneType]) ``
 > > Start the audio device: playback and capture begin. The audio data for playback is provided by
 the given callback generator, which is sent the recorded audio data as an array.array whose type
@@ -491,6 +503,12 @@ give the file type to a decoder upfront. You can ignore this method then.
 > *method*  ``close  (self) ``
 > > Halt playback or capture and close down the device. If you use the device as a context manager,
 it will be closed automatically.
+
+> *method*  ``get_master_volume  (self) -> float``
+> > Get the master volume of the device. Returns a value between 0.0 and 1.0.
+
+> *method*  ``set_master_volume  (self, volume: float) ``
+> > Set the master volume of the device. Volume should be between 0.0 and 1.0.
 
 > *method*  ``start  (self, callback_generator: Generator[bytes | array.array, int, NoneType]) ``
 > > Start the audio device: playback begins. The audio data is provided by the given callback
