@@ -621,6 +621,8 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     ma_result ma_device_start(ma_device* pDevice);
     ma_result ma_device_stop(ma_device* pDevice);
     ma_bool32 ma_device_is_started(ma_device* pDevice);
+    ma_result ma_device_set_master_volume(ma_device* pDevice, float volume);
+    ma_result ma_device_get_master_volume(ma_device* pDevice, float* pVolume);
     ma_context_config ma_context_config_init(void);
     ma_device_config ma_device_config_init(ma_device_type deviceType);
     ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outputChannels, ma_uint32 outputSampleRate);

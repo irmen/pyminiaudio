@@ -1887,6 +1887,30 @@ class AbstractDevice:
             self._context = None
         self.stop_callback = None
 
+    def set_master_volume(self, volume: float) -> None:
+        """Set the master volume of the device. Volume should be between 0.0 and 1.0."""
+        if volume < 0.0 or volume > 1.0:
+            raise MiniaudioError("volume must be between 0.0 and 1.0", volume)
+
+        if self._device is None:
+            raise MiniaudioError("device is closed")
+
+        result = lib.ma_device_set_master_volume(self._device, volume)
+
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("failed to set master volume", result)
+    
+    def get_master_volume(self) -> float:
+        """Get the master volume of the device. Returns a value between 0.0 and 1.0."""
+        if self._device is None:
+            raise MiniaudioError("device is closed")
+
+        with ffi.new("float *") as volume:
+            result = lib.ma_device_get_master_volume(self._device, volume)
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("failed to get master volume", result)
+            return volume[0]
+    
     def _stop_callback(self, device: ffi.CData) -> None:
         """Called when the device is stopped (i.e. device disconnect or manual stop) Doesn't work consistently however."""
         if self.stop_callback:
