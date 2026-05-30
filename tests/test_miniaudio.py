@@ -565,3 +565,61 @@ def test_wavfilereadstream(tmp_path):
     info = miniaudio.wav_get_file_info(str(output_file))
     assert info.sample_rate == 44100
     assert info.nchannels == 2
+
+
+def test_convert_frames_trims_padding_on_resampling():
+    """
+    Verify that convert_frames() correctly trims the output buffer
+    to the actual number of frames written by ma_convert_frames.
+    When downsampling 44100 -> 22050, ma_calculate_frame_count_after_resampling
+    may overestimate - the returned buffer should be trimmed accordingly.
+    """
+    import math
+    import array
+
+    src_rate = 44100
+    dst_rate = 22050
+    nchannels = 2
+    num_frames = 200
+
+    samples = array.array("h", [0]) * (num_frames * nchannels)
+    for i in range(num_frames):
+        val = int(math.sin(2 * math.pi * 440 * i / src_rate) * 30000)
+        for ch in range(nchannels):
+            samples[i * nchannels + ch] = val
+
+    converted = miniaudio.convert_frames(
+        miniaudio.SampleFormat.SIGNED16,
+        nchannels,
+        src_rate,
+        bytes(samples),
+        miniaudio.SampleFormat.SIGNED16,
+        nchannels,
+        dst_rate,
+    )
+
+    to_width = miniaudio.width_from_format(miniaudio.SampleFormat.SIGNED16)
+    allocated = miniaudio.lib.ma_calculate_frame_count_after_resampling(
+        dst_rate, src_rate, num_frames
+    )
+    buffer = bytearray(allocated * to_width * nchannels)
+    actual = miniaudio.lib.ma_convert_frames(
+        miniaudio.ffi.from_buffer(buffer),
+        allocated,
+        miniaudio.SampleFormat.SIGNED16.value,
+        nchannels,
+        dst_rate,
+        bytes(samples),
+        num_frames,
+        miniaudio.SampleFormat.SIGNED16.value,
+        nchannels,
+        src_rate,
+    )
+
+    expected_size = actual * to_width * nchannels
+    assert len(converted) == expected_size, (
+        f"convert_frames returned {len(converted)} bytes, "
+        f"expected {expected_size} bytes (actual frames from ma_convert_frames). "
+        f"Buffer was allocated for {allocated} frames, "
+        f"but ma_convert_frames wrote only {actual} frames."
+    )

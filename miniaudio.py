@@ -144,7 +144,7 @@ class SoundFileInfo:
         sample_format: SampleFormat,
         duration: float,
         num_frames: int,
-        sub_format: int = None,
+        sub_format: Optional[int] = None,
     ) -> None:
         self.name = name
         self.nchannels = nchannels
@@ -1807,8 +1807,7 @@ def convert_frames(
         to_samplerate, from_samplerate, num_frames
     )
     buffer = bytearray(output_frame_count * sample_width * to_numchannels)
-    # note: the API doesn't have an option here to specify the dither mode.
-    lib.ma_convert_frames(
+    actual_frames = lib.ma_convert_frames(
         ffi.from_buffer(buffer),
         output_frame_count,
         to_fmt.value,
@@ -1820,6 +1819,8 @@ def convert_frames(
         from_numchannels,
         from_samplerate,
     )
+    if actual_frames < output_frame_count:
+        del buffer[actual_frames * sample_width * to_numchannels :]
     return buffer
 
 
