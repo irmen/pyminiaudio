@@ -4,9 +4,9 @@
 # Python miniaudio
 
 Multiplatform audio playback, recording, decoding and sample format conversion for
-Linux (including Raspberri Pi), Windows, Mac and others.
+Linux (including Raspberry Pi), Windows, Mac and others.
 
-Installation for most users: via [Pypi](https://pypi.org/project/miniaudio/), Raspberri Pi builds via [PiWheels](https://www.piwheels.org/project/miniaudio/).
+Installation for most users: via [Pypi](https://pypi.org/project/miniaudio/), Raspberry Pi builds via [PiWheels](https://www.piwheels.org/project/miniaudio/).
 
 
 This is a Pythonic interface to the cross-platform [miniaudio](https://github.com/dr-soft/miniaudio/) C library:

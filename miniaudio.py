@@ -1311,13 +1311,13 @@ def _samples_stream_generator(
     sample_width = width_from_format(output_format)
     samples_proto = _array_proto_from_format(output_format)
     allocated_buffer_frames = max(frames_to_read, 16384)
+    source = None  # type: Optional[StreamableSource]
     try:
         with ffi.new(
             "int8_t[]", allocated_buffer_frames * nchannels * sample_width
         ) as decodebuffer:
             buf_ptr = ffi.cast("void *", decodebuffer)
             want_frames = (yield samples_proto) or frames_to_read
-            source = None  # type: Optional[StreamableSource]
             if decoder.pUserData != ffi.NULL:
                 source = ffi.from_handle(decoder.pUserData)
             while True:
@@ -1355,6 +1355,8 @@ def _samples_stream_generator(
     finally:
         if on_close:
             on_close()
+        if source:
+            source.close()
         lib.ma_decoder_uninit(decoder)
 
 
@@ -1533,6 +1535,7 @@ class IceCastClient(StreamableSource):
         self.audio_info = ""
         self.audio_format = FileFormat.UNKNOWN
         self._stop_stream = False
+        self.download_error = None
         self._buffer = b""
         self._buffer_lock = threading.Lock()
         self._update_title = update_stream_title
@@ -1540,6 +1543,7 @@ class IceCastClient(StreamableSource):
         with urllib.request.urlopen(req, context=ssl_context) as result:
             self.station_genre = result.headers["icy-genre"]
             self.station_name = result.headers["icy-name"]
+            self.audio_info = result.headers.get("ice-audio-info", "")
             stream_format = result.headers["Content-Type"]
             self.audio_format = self.determine_audio_format(stream_format)
         self._download_thread = threading.Thread(
@@ -1560,6 +1564,12 @@ class IceCastClient(StreamableSource):
     def read(self, num_bytes: int) -> bytes:
         """Read a chunk of data from the stream."""
         while len(self._buffer) < num_bytes:
+            if not self._download_thread.is_alive():
+                if self.download_error:
+                    raise self.download_error
+                raise DecodeError("download thread died unexpectedly")
+            if self._stop_stream:
+                raise DecodeError("stream closed")
             time.sleep(0.1)
         with self._buffer_lock:
             chunk = self._buffer[:num_bytes]
@@ -1574,54 +1584,54 @@ class IceCastClient(StreamableSource):
     def _readall(self, fileobject, size: int) -> bytes:
         b = b""
         while len(b) < size:
-            b += fileobject.read(size)
+            chunk = fileobject.read(size - len(b))
+            if not chunk:
+                break
+            b += chunk
         return b
 
     def _download_stream(self) -> None:
         req = urllib.request.Request(self.url, headers={"icy-metadata": "1"})
-        with urllib.request.urlopen(req) as result:
-            self.station_genre = result.headers["icy-genre"]
-            self.station_name = result.headers["icy-name"]
-            stream_format = result.headers["Content-Type"]
-            if stream_format:
-                self.audio_format = self.determine_audio_format(stream_format)
-            self.audio_info = result.headers.get("ice-audio-info", "")
-            if "icy-metaint" in result.headers:
-                meta_interval = int(result.headers["icy-metaint"])
-            else:
-                meta_interval = 0
-            if meta_interval:
-                # note: the meta_interval is fixed for the entire stream, so just use that as chunk size
-                while not self._stop_stream:
-                    while len(self._buffer) >= self.BUFFER_SIZE:
-                        time.sleep(0.2)
-                        if self._stop_stream:
-                            return
-                    chunk = self._readall(result, meta_interval)
-                    with self._buffer_lock:
-                        self._buffer += chunk
-                    meta_size = 16 * self._readall(result, 1)[0]
-                    metadata = str(
-                        self._readall(result, meta_size).strip(b"\0"),
-                        "utf-8",
-                        errors="replace",
-                    )
-                    if metadata:
-                        meta = self.parse_metadata(metadata)
-                        stream_title = meta.get("StreamTitle")
-                        if stream_title:
-                            self.stream_title = stream_title
-                            if self._update_title:
-                                self._update_title(self, stream_title)
-            else:
-                while not self._stop_stream:
-                    while len(self._buffer) >= self.BUFFER_SIZE:
-                        time.sleep(0.2)
-                        if self._stop_stream:
-                            return
-                    chunk = result.read(self.BLOCK_SIZE)
-                    with self._buffer_lock:
-                        self._buffer += chunk
+        try:
+            with urllib.request.urlopen(req) as result:
+                if "icy-metaint" in result.headers:
+                    meta_interval = int(result.headers["icy-metaint"])
+                else:
+                    meta_interval = 0
+                if meta_interval:
+                    while not self._stop_stream:
+                        while len(self._buffer) >= self.BUFFER_SIZE:
+                            time.sleep(0.2)
+                            if self._stop_stream:
+                                return
+                        chunk = self._readall(result, meta_interval)
+                        with self._buffer_lock:
+                            self._buffer += chunk
+                        meta_size = 16 * self._readall(result, 1)[0]
+                        metadata = str(
+                            self._readall(result, meta_size).strip(b"\0"),
+                            "utf-8",
+                            errors="replace",
+                        )
+                        if metadata:
+                            meta = self.parse_metadata(metadata)
+                            stream_title = meta.get("StreamTitle")
+                            if stream_title:
+                                self.stream_title = stream_title
+                                if self._update_title:
+                                    self._update_title(self, stream_title)
+                else:
+                    while not self._stop_stream:
+                        while len(self._buffer) >= self.BUFFER_SIZE:
+                            time.sleep(0.2)
+                            if self._stop_stream:
+                                return
+                        chunk = result.read(self.BLOCK_SIZE)
+                        with self._buffer_lock:
+                            self._buffer += chunk
+        except Exception as x:
+            self.download_error = x
+            raise
 
     @staticmethod
     def parse_metadata(metadata: str) -> Dict[str, str]:
