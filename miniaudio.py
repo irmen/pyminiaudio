@@ -1863,7 +1863,7 @@ class AbstractDevice:
 
     def start(self, callback_generator: GeneratorTypes) -> None:
         """Start playback or capture, using the given callback generator (should already been started)"""
-        if self.callback_generator:
+        if self.running:
             raise MiniaudioError("can't start an already started device")
         # This check fails on Cython... just skip it:
         # if not inspect.isgenerator(callback_generator):
@@ -2034,9 +2034,11 @@ class CaptureDevice(AbstractDevice):
                 self.callback_generator.send(samples)
             except StopIteration:
                 self.callback_generator = None
+                self.running = False
                 return
             except Exception:
                 self.callback_generator = None
+                self.running = False
                 raise
 
 
@@ -2102,14 +2104,17 @@ class PlaybackDevice(AbstractDevice):
                 samples = self.callback_generator.send(framecount)
             except StopIteration:
                 self.callback_generator = None
+                self.running = False
                 return
             except Exception:
                 self.callback_generator = None
+                self.running = False
                 raise
             samples_bytes = _bytes_from_generator_samples(samples)
             if samples_bytes:
                 if len(samples_bytes) > framecount * self.sample_width * self.nchannels:
                     self.callback_generator = None
+                    self.running = False
                     raise MiniaudioError(
                         "number of frames from callback exceeds maximum"
                     )
@@ -2193,9 +2198,11 @@ class DuplexStream(AbstractDevice):
                 out_data = self.callback_generator.send(samples)
             except StopIteration:
                 self.callback_generator = None
+                self.running = False
                 return
             except Exception:
                 self.callback_generator = None
+                self.running = False
                 raise
             if out_data:
                 samples_bytes = _bytes_from_generator_samples(out_data)

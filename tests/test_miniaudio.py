@@ -1,3 +1,5 @@
+import pytest
+
 import miniaudio
 from unittest import mock
 
@@ -651,3 +653,14 @@ def test_stream_raw_pcm_memory_memoryview_correct_size():
     # Last chunk may be partial
     assert len(chunks) > 1
     assert sum(len(c) for c in chunks) == total_frames * nchannels * sample_width
+
+
+def test_device_start_guard_running_state():
+    device = miniaudio.PlaybackDevice(backends=[miniaudio.Backend.NULL])
+    device.running = True
+    device.callback_generator = None
+    gen = dummy_generator()
+    next(gen)
+    with pytest.raises(miniaudio.MiniaudioError):
+        device.start(gen)
+    device.close()
