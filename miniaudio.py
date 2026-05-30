@@ -1464,6 +1464,8 @@ def stream_raw_pcm_memory(
         if type(pcmdata) is array.array:
             sample_width = 1  # array.array frames already yield the correct data size
         memdata = memoryview(pcmdata)
+        if not (type(pcmdata) is array.array) and memdata.itemsize != 1:
+            memdata = memdata.cast("B")
         required_frames = (yield b"") or frames_to_read  # generator initialization
         frames = 0
         while frames < len(memdata):

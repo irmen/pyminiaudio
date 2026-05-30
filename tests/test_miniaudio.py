@@ -623,3 +623,31 @@ def test_convert_frames_trims_padding_on_resampling():
         f"Buffer was allocated for {allocated} frames, "
         f"but ma_convert_frames wrote only {actual} frames."
     )
+
+
+def test_stream_raw_pcm_memory_memoryview_correct_size():
+    import array
+
+    nchannels = 2
+    sample_width = 2  # 16-bit signed
+    frames_to_read = 50
+    total_frames = 200
+
+    samples = array.array("h", [0]) * (total_frames * nchannels)
+    for i in range(total_frames * nchannels):
+        samples[i] = (i * 1000) & 0x7FFF
+
+    pcmdata = memoryview(samples)
+    gen = miniaudio.stream_raw_pcm_memory(
+        pcmdata, nchannels, sample_width, frames_to_read
+    )
+
+    chunks = list(gen)
+    for i, chunk in enumerate(chunks[:-1]):
+        expected = frames_to_read * nchannels * sample_width
+        assert len(chunk) == expected, (
+            f"Chunk {i}: expected {expected} bytes, got {len(chunk)} bytes"
+        )
+    # Last chunk may be partial
+    assert len(chunks) > 1
+    assert sum(len(c) for c in chunks) == total_frames * nchannels * sample_width
