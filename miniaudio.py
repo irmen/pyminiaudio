@@ -1926,10 +1926,10 @@ class AbstractDevice:
     
     def _stop_callback(self, device: ffi.CData) -> None:
         """Called when the device is stopped (i.e. device disconnect or manual stop) Doesn't work consistently however."""
+        self.running = False
+        self.callback_generator = None
         if self.stop_callback:
-            self.running = False
             self.stop_callback()
-            self.callback_generator = None
 
     def _make_context(
         self,
@@ -2144,7 +2144,9 @@ class DuplexStream(AbstractDevice):
             raise MiniaudioError("SIGNED24 has no native Python array type; use a different format")
         self.capture_format = capture_format
         self.playback_format = playback_format
-        self.sample_width = width_from_format(capture_format)
+        self.capture_sample_width = width_from_format(capture_format)
+        self.playback_sample_width = width_from_format(playback_format)
+        self.sample_width = self.capture_sample_width
         self.capture_channels = capture_channels
         self.playback_channels = playback_channels
         self.sample_rate = sample_rate
@@ -2188,7 +2190,7 @@ class DuplexStream(AbstractDevice):
     def _data_callback(
         self, device: ffi.CData, output: ffi.CData, input: ffi.CData, framecount: int
     ) -> None:
-        buffer_size = self.sample_width * self.capture_channels * framecount
+        buffer_size = self.capture_sample_width * self.capture_channels * framecount
         in_data = bytearray(buffer_size)
         ffi.memmove(in_data, input, buffer_size)
         if self.callback_generator:
@@ -2206,7 +2208,14 @@ class DuplexStream(AbstractDevice):
                 raise
             if out_data:
                 samples_bytes = _bytes_from_generator_samples(out_data)
-                ffi.memmove(output, samples_bytes, len(samples_bytes))
+                if samples_bytes:
+                    if len(samples_bytes) > framecount * self.playback_sample_width * self.playback_channels:
+                        self.callback_generator = None
+                        self.running = False
+                        raise MiniaudioError(
+                            "number of frames from callback exceeds maximum"
+                        )
+                    ffi.memmove(output, samples_bytes, len(samples_bytes))
 
 
 def _bytes_from_generator_samples(

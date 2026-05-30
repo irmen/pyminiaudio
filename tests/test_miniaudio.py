@@ -664,3 +664,63 @@ def test_device_start_guard_running_state():
     with pytest.raises(miniaudio.MiniaudioError):
         device.start(gen)
     device.close()
+
+def test_stop_callback_updates_state_without_user_callback():
+    # Bug: AbstractDevice._stop_callback only updates state if self.stop_callback is set.
+    device = miniaudio.PlaybackDevice(backends=[miniaudio.Backend.NULL])
+    device.running = True
+    device.callback_generator = mock_generator()
+    
+    # Manually trigger stop callback
+    device._stop_callback(device._device)
+    
+    # These should be updated even if no user stop_callback was provided
+    assert device.running is False, "device.running should be False after stop callback"
+    assert device.callback_generator is None, "device.callback_generator should be None after stop callback"
+    device.close()
+
+def mock_generator():
+    while True:
+        yield b"\0" * 400
+
+def test_duplex_stream_buffer_overflow_check():
+    # Bug: DuplexStream doesn't check if the returned data exceeds the buffer size.
+    device = miniaudio.DuplexStream(backends=[miniaudio.Backend.NULL])
+    
+    def naughty_generator():
+        while True:
+            # Return way too much data (more than what framecount*width*channels would be)
+            yield b"\0" * 1000000 
+    
+    gen = naughty_generator()
+    next(gen)  # start/prime the generator
+    device.callback_generator = gen
+    device.running = True
+    
+    # This should raise MiniaudioError instead of overflowing (via ffi.memmove)
+    with pytest.raises(miniaudio.MiniaudioError, match="number of frames from callback exceeds maximum"):
+        # We need a dummy framecount. The _data_callback uses framecount from miniaudio.
+        framecount = 100
+        dummy_input = bytes(device.capture_sample_width * device.capture_channels * framecount)
+        device._data_callback(device._device, miniaudio.ffi.NULL, dummy_input, framecount)
+    
+    device.close()
+
+def test_duplex_stream_mismatched_widths():
+    # Bug: DuplexStream assumes capture and playback widths are same (stores only one self.sample_width)
+    # capture is 16-bit (2 bytes), playback is 32-bit (4 bytes)
+    device = miniaudio.DuplexStream(
+        capture_format=miniaudio.SampleFormat.SIGNED16,
+        playback_format=miniaudio.SampleFormat.SIGNED32,
+        backends=[miniaudio.Backend.NULL]
+    )
+    
+    assert device.sample_width == 2 # from capture
+    # If playback uses 4 bytes, then a framecount of 100 needs 100 * 2 * 4 = 800 bytes for output
+    # But if we use device.sample_width (2), we might think it only needs 400 bytes.
+    
+    # We should have separate widths for capture and playback.
+    assert hasattr(device, "playback_sample_width"), "DuplexStream should have playback_sample_width"
+    assert device.playback_sample_width == 4
+    
+    device.close()
