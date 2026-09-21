@@ -12,7 +12,7 @@ jobs:
         # Need to be PIP517 build in order to avoid setuptools bug - https://github.com/pypa/cibuildwheel/issues/813
         # I dunno enough about the work involved in that - sorry!
         # os: [ubuntu-latest, windows-latest, macos-11, macos-latest]
-          os: [ubuntu-latest, windows-latest, macos-latest]
+          os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
