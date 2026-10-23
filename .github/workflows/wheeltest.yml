@@ -9,10 +9,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Need to be PIP517 build in order to avoid setuptools bug - https://github.com/pypa/cibuildwheel/issues/813
-        # I dunno enough about the work involved in that - sorry!
-        # os: [ubuntu-latest, windows-latest, macos-11, macos-latest]
-          os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+          - os: ubuntu-26.04-arm
+            architectures: auto armv7l
+          - os: windows-latest
+          - os: windows-11-arm
+          - os: macos-latest # arm64
+          - os: macos-26-intel
 
     steps:
       - uses: actions/checkout@v6
@@ -23,10 +27,11 @@ jobs:
           python-version: '3.14'
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.1
+        uses: pypa/cibuildwheel@v4.3.4
         env:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
+          CIBW_ARCHS: ${{ matrix.architectures || 'auto' }}
           CIBW_ARCHS_MACOS: 'x86_64 arm64'
           CIBW_BUILD: 'cp310-* cp311-* cp312-* cp313-* cp314-*'
           CIBW_TEST_COMMAND_LINUX: "cd {project} && pytest -v tests/"
