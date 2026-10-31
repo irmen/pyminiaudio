@@ -724,3 +724,34 @@ def test_duplex_stream_mismatched_widths():
     assert device.playback_sample_width == 4
     
     device.close()
+
+
+def test_generate_waveform():
+    data = miniaudio.generate_waveform(100, sample_rate=22050, channels=2)
+    assert isinstance(data, (bytes, bytearray, memoryview))
+    assert len(data) == 100 * 2 * 4  # float32
+
+
+def test_generate_noise():
+    data = miniaudio.generate_noise(50, noise_type=miniaudio.NoiseType.PINK)
+    assert len(data) == 50 * 1 * 4
+
+
+def test_generate_pulsewave():
+    data = miniaudio.generate_pulsewave(10, duty_cycle=0.25)
+    assert len(data) == 10 * 1 * 4
+
+
+def test_stream_waveform():
+    gen = miniaudio.stream_waveform(frames_to_read=64)
+    chunk = gen.send(64)
+    assert len(chunk) == 64 * 1 * 4
+
+
+def test_stream_pulsewave_setters():
+    gen = miniaudio.stream_pulsewave(frames_to_read=32, duty_cycle=0.5)
+    assert len(gen.send(32)) == 32 * 1 * 4
+    gen.set_duty_cycle(0.1)
+    gen.set_amplitude(0.5)
+    gen.set_frequency(880.0)
+    assert len(gen.send(32)) == 32 * 1 * 4

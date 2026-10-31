@@ -50,6 +50,23 @@ class SampleFormat(Enum):
     FLOAT32 = lib.ma_format_f32
 
 
+class WaveformType(Enum):
+    """Waveform type for the waveform generator"""
+
+    SINE = lib.ma_waveform_type_sine
+    SQUARE = lib.ma_waveform_type_square
+    TRIANGLE = lib.ma_waveform_type_triangle
+    SAWTOOTH = lib.ma_waveform_type_sawtooth
+
+
+class NoiseType(Enum):
+    """Noise type for the noise generator"""
+
+    WHITE = lib.ma_noise_type_white
+    PINK = lib.ma_noise_type_pink
+    BROWNIAN = lib.ma_noise_type_brownian
+
+
 class DeviceType(Enum):
     """Type of audio device"""
 
@@ -1440,6 +1457,297 @@ def stream_memory(
     return g
 
 
+def generate_waveform(
+    num_frames: int,
+    sample_rate: int = 44100,
+    channels: int = 1,
+    waveform_type: WaveformType = WaveformType.SINE,
+    amplitude: float = 1.0,
+    frequency: float = 440.0,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+) -> bytes:
+    """Generate ``num_frames`` of waveform PCM data and return it as raw bytes."""
+    config = lib.ma_waveform_config_init(
+        sample_format.value,
+        channels,
+        sample_rate,
+        waveform_type.value,
+        amplitude,
+        frequency,
+    )
+    waveform = ffi.new("ma_waveform *")
+    result = lib.ma_waveform_init(ffi.addressof(config), waveform)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init waveform", result)
+    try:
+        width = width_from_format(sample_format)
+        size = num_frames * channels * width
+        buf = ffi.new("char[]", size)
+        frames_read = ffi.new("ma_uint64 *")
+        result = lib.ma_waveform_read_pcm_frames(
+            waveform, buf, num_frames, frames_read
+        )
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("failed to read waveform", result)
+        actual = int(frames_read[0]) * channels * width
+        return bytes(ffi.buffer(buf, actual))
+    finally:
+        lib.ma_waveform_uninit(waveform)
+
+
+def generate_noise(
+    num_frames: int,
+    sample_rate: int = 44100,
+    channels: int = 1,
+    noise_type: NoiseType = NoiseType.WHITE,
+    amplitude: float = 1.0,
+    seed: int = 0,
+    duplicate_channels: bool = False,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+) -> bytes:
+    """Generate ``num_frames`` of noise PCM data and return it as raw bytes."""
+    config = lib.ma_noise_config_init(
+        sample_format.value, channels, noise_type.value, seed, amplitude
+    )
+    config.duplicateChannels = 1 if duplicate_channels else 0
+    noise = ffi.new("ma_noise *")
+    result = lib.ma_noise_init(ffi.addressof(config), ffi.NULL, noise)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init noise", result)
+    try:
+        width = width_from_format(sample_format)
+        size = num_frames * channels * width
+        buf = ffi.new("char[]", size)
+        frames_read = ffi.new("ma_uint64 *")
+        result = lib.ma_noise_read_pcm_frames(noise, buf, num_frames, frames_read)
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("failed to read noise", result)
+        actual = int(frames_read[0]) * channels * width
+        return bytes(ffi.buffer(buf, actual))
+    finally:
+        lib.ma_noise_uninit(noise, ffi.NULL)
+
+
+def generate_pulsewave(
+    num_frames: int,
+    sample_rate: int = 44100,
+    channels: int = 1,
+    duty_cycle: float = 0.5,
+    amplitude: float = 1.0,
+    frequency: float = 440.0,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+) -> bytes:
+    """Generate ``num_frames`` of pulse wave PCM data and return it as raw bytes."""
+    config = lib.ma_pulsewave_config_init(
+        sample_format.value,
+        channels,
+        sample_rate,
+        duty_cycle,
+        amplitude,
+        frequency,
+    )
+    pulsewave = ffi.new("ma_pulsewave *")
+    result = lib.ma_pulsewave_init(ffi.addressof(config), pulsewave)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init pulsewave", result)
+    try:
+        width = width_from_format(sample_format)
+        size = num_frames * channels * width
+        buf = ffi.new("char[]", size)
+        frames_read = ffi.new("ma_uint64 *")
+        result = lib.ma_pulsewave_read_pcm_frames(
+            pulsewave, buf, num_frames, frames_read
+        )
+        if result != lib.MA_SUCCESS:
+            raise MiniaudioError("failed to read pulsewave", result)
+        actual = int(frames_read[0]) * channels * width
+        return bytes(ffi.buffer(buf, actual))
+    finally:
+        lib.ma_pulsewave_uninit(pulsewave)
+
+
+def stream_pulsewave(
+    sample_rate: int = 44100,
+    channels: int = 1,
+    duty_cycle: float = 0.5,
+    amplitude: float = 1.0,
+    frequency: float = 440.0,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+    frames_to_read: int = 4096,
+) -> "PlaybackCallbackGeneratorType":
+    """Convenience generator to stream an (endless) pulse wave as PCM audio."""
+    config = lib.ma_pulsewave_config_init(
+        sample_format.value,
+        channels,
+        sample_rate,
+        duty_cycle,
+        amplitude,
+        frequency,
+    )
+    pulsewave = ffi.new("ma_pulsewave *")
+    result = lib.ma_pulsewave_init(ffi.addressof(config), pulsewave)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init pulsewave", result)
+    width = width_from_format(sample_format)
+
+    def _gen() -> "PlaybackCallbackGeneratorType":
+        required_frames = (yield b"") or frames_to_read  # generator initialization
+        try:
+            while True:
+                size = required_frames * channels * width
+                buf = ffi.new("char[]", size)
+                frames_read = ffi.new("ma_uint64 *")
+                result = lib.ma_pulsewave_read_pcm_frames(
+                    pulsewave, buf, required_frames, frames_read
+                )
+                if result != lib.MA_SUCCESS:
+                    raise MiniaudioError("failed to read pulsewave", result)
+                n = int(frames_read[0])
+                if n <= 0:
+                    required_frames = (yield b"") or frames_to_read
+                    continue
+                data = bytes(ffi.buffer(buf, n * channels * width))
+                required_frames = (yield data) or frames_to_read
+        finally:
+            lib.ma_pulsewave_uninit(pulsewave)
+
+    g = _gen()
+    dummy = next(g)
+    assert len(dummy) == 0
+
+    class _PulseWaveStream:
+        def __init__(self, gen):
+            self._gen = gen
+
+        def send(self, value):
+            return self._gen.send(value)
+
+        def __next__(self):
+            return next(self._gen)
+
+        def throw(self, *args, **kwargs):
+            return self._gen.throw(*args, **kwargs)
+
+        def close(self):
+            return self._gen.close()
+
+        def set_duty_cycle(self, value: float) -> None:
+            result = lib.ma_pulsewave_set_duty_cycle(pulsewave, float(value))
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("failed to set pulsewave duty cycle", result)
+
+        def set_amplitude(self, value: float) -> None:
+            result = lib.ma_pulsewave_set_amplitude(pulsewave, float(value))
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("failed to set pulsewave amplitude", result)
+
+        def set_frequency(self, value: float) -> None:
+            result = lib.ma_pulsewave_set_frequency(pulsewave, float(value))
+            if result != lib.MA_SUCCESS:
+                raise MiniaudioError("failed to set pulsewave frequency", result)
+
+    return _PulseWaveStream(g)
+
+
+def stream_waveform(
+    sample_rate: int = 44100,
+    channels: int = 1,
+    waveform_type: WaveformType = WaveformType.SINE,
+    amplitude: float = 1.0,
+    frequency: float = 440.0,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+    frames_to_read: int = 4096,
+) -> "PlaybackCallbackGeneratorType":
+    """Convenience generator to stream an (endless) waveform as PCM audio."""
+    config = lib.ma_waveform_config_init(
+        sample_format.value,
+        channels,
+        sample_rate,
+        waveform_type.value,
+        amplitude,
+        frequency,
+    )
+    waveform = ffi.new("ma_waveform *")
+    result = lib.ma_waveform_init(ffi.addressof(config), waveform)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init waveform", result)
+    width = width_from_format(sample_format)
+
+    def _gen() -> "PlaybackCallbackGeneratorType":
+        required_frames = (yield b"") or frames_to_read  # generator initialization
+        try:
+            while True:
+                size = required_frames * channels * width
+                buf = ffi.new("char[]", size)
+                frames_read = ffi.new("ma_uint64 *")
+                result = lib.ma_waveform_read_pcm_frames(
+                    waveform, buf, required_frames, frames_read
+                )
+                if result != lib.MA_SUCCESS:
+                    raise MiniaudioError("failed to read waveform", result)
+                n = int(frames_read[0])
+                if n <= 0:
+                    required_frames = (yield b"") or frames_to_read
+                    continue
+                data = bytes(ffi.buffer(buf, n * channels * width))
+                required_frames = (yield data) or frames_to_read
+        finally:
+            lib.ma_waveform_uninit(waveform)
+
+    g = _gen()
+    dummy = next(g)
+    assert len(dummy) == 0
+    return g
+
+
+def stream_noise(
+    sample_rate: int = 44100,
+    channels: int = 1,
+    noise_type: NoiseType = NoiseType.WHITE,
+    amplitude: float = 1.0,
+    seed: int = 0,
+    duplicate_channels: bool = False,
+    sample_format: SampleFormat = SampleFormat.FLOAT32,
+    frames_to_read: int = 4096,
+) -> "PlaybackCallbackGeneratorType":
+    """Convenience generator to stream (endless) noise as PCM audio."""
+    config = lib.ma_noise_config_init(
+        sample_format.value, channels, noise_type.value, seed, amplitude
+    )
+    config.duplicateChannels = 1 if duplicate_channels else 0
+    noise = ffi.new("ma_noise *")
+    result = lib.ma_noise_init(ffi.addressof(config), ffi.NULL, noise)
+    if result != lib.MA_SUCCESS:
+        raise MiniaudioError("failed to init noise", result)
+    width = width_from_format(sample_format)
+
+    def _gen() -> "PlaybackCallbackGeneratorType":
+        required_frames = (yield b"") or frames_to_read  # generator initialization
+        try:
+            while True:
+                size = required_frames * channels * width
+                buf = ffi.new("char[]", size)
+                frames_read = ffi.new("ma_uint64 *")
+                result = lib.ma_noise_read_pcm_frames(
+                    noise, buf, required_frames, frames_read
+                )
+                if result != lib.MA_SUCCESS:
+                    raise MiniaudioError("failed to read noise", result)
+                n = int(frames_read[0])
+                if n <= 0:
+                    required_frames = (yield b"") or frames_to_read
+                    continue
+                data = bytes(ffi.buffer(buf, n * channels * width))
+                required_frames = (yield data) or frames_to_read
+        finally:
+            lib.ma_noise_uninit(noise, ffi.NULL)
+
+    g = _gen()
+    dummy = next(g)
+    assert len(dummy) == 0
+    return g
+
+
 def stream_raw_pcm_memory(
     pcmdata: Union[array.array, memoryview, bytes],
     nchannels: int,
@@ -2317,3 +2625,13 @@ def get_enabled_backends() -> Set[Backend]:
 def is_loopback_supported(backend: Backend) -> bool:
     """Determines whether or not loopback mode is support by a backend."""
     return bool(lib.ma_is_loopback_supported(backend.value))
+
+
+def volume_linear_to_db(factor: float) -> float:
+    """Convert a linear volume factor to gain in decibels."""
+    return float(lib.ma_volume_linear_to_db(float(factor)))
+
+
+def volume_db_to_linear(gain_db: float) -> float:
+    """Convert a gain in decibels to a linear volume factor."""
+    return float(lib.ma_volume_db_to_linear(float(gain_db)))

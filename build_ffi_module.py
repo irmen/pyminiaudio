@@ -656,6 +656,9 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     const char* ma_get_format_name(ma_format format);
     void ma_free(void* p, const ma_allocation_callbacks* pAllocationCallbacks);
 
+    float ma_volume_linear_to_db(float factor);
+    float ma_volume_db_to_linear(float gain);
+
     void init_miniaudio(void);
     void *malloc(size_t size);
     void free(void *ptr);
@@ -669,6 +672,109 @@ typedef ma_bool32 (* ma_enum_devices_callback_proc)(ma_context* pContext, ma_dev
     extern "Python" ma_result _internal_decoder_seek_callback(ma_decoder* pDecoder, ma_int64 byteOffset, ma_seek_origin origin);
     
     
+/********************** Generation ******************************/
+
+typedef enum
+{
+    ma_waveform_type_sine,
+    ma_waveform_type_square,
+    ma_waveform_type_triangle,
+    ma_waveform_type_sawtooth
+} ma_waveform_type;
+
+typedef struct { ...; } ma_data_source_base;
+typedef struct { ...; } ma_lcg;
+
+typedef struct
+{
+    ma_format format;
+    ma_uint32 channels;
+    ma_uint32 sampleRate;
+    ma_waveform_type type;
+    double amplitude;
+    double frequency;
+} ma_waveform_config;
+
+typedef struct
+{
+    ma_data_source_base ds;
+    ma_waveform_config config;
+    double advance;
+    double time;
+} ma_waveform;
+
+ma_waveform_config ma_waveform_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, ma_waveform_type type, double amplitude, double frequency);
+ma_result ma_waveform_init(const ma_waveform_config* pConfig, ma_waveform* pWaveform);
+void ma_waveform_uninit(ma_waveform* pWaveform);
+ma_result ma_waveform_read_pcm_frames(ma_waveform* pWaveform, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
+ma_result ma_waveform_seek_to_pcm_frame(ma_waveform* pWaveform, ma_uint64 frameIndex);
+ma_result ma_waveform_set_amplitude(ma_waveform* pWaveform, double amplitude);
+ma_result ma_waveform_set_frequency(ma_waveform* pWaveform, double frequency);
+ma_result ma_waveform_set_type(ma_waveform* pWaveform, ma_waveform_type type);
+ma_result ma_waveform_set_sample_rate(ma_waveform* pWaveform, ma_uint32 sampleRate);
+
+typedef struct
+{
+    ma_format format;
+    ma_uint32 channels;
+    ma_uint32 sampleRate;
+    double dutyCycle;
+    double amplitude;
+    double frequency;
+} ma_pulsewave_config;
+
+typedef struct
+{
+    ma_waveform waveform;
+    ma_pulsewave_config config;
+} ma_pulsewave;
+
+ma_pulsewave_config ma_pulsewave_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, double dutyCycle, double amplitude, double frequency);
+ma_result ma_pulsewave_init(const ma_pulsewave_config* pConfig, ma_pulsewave* pWaveform);
+void ma_pulsewave_uninit(ma_pulsewave* pWaveform);
+ma_result ma_pulsewave_read_pcm_frames(ma_pulsewave* pWaveform, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
+ma_result ma_pulsewave_seek_to_pcm_frame(ma_pulsewave* pWaveform, ma_uint64 frameIndex);
+ma_result ma_pulsewave_set_amplitude(ma_pulsewave* pWaveform, double amplitude);
+ma_result ma_pulsewave_set_frequency(ma_pulsewave* pWaveform, double frequency);
+ma_result ma_pulsewave_set_sample_rate(ma_pulsewave* pWaveform, ma_uint32 sampleRate);
+ma_result ma_pulsewave_set_duty_cycle(ma_pulsewave* pWaveform, double dutyCycle);
+
+typedef enum
+{
+    ma_noise_type_white,
+    ma_noise_type_pink,
+    ma_noise_type_brownian
+} ma_noise_type;
+
+typedef struct
+{
+    ma_format format;
+    ma_uint32 channels;
+    ma_noise_type type;
+    ma_int32 seed;
+    double amplitude;
+    ma_bool32 duplicateChannels;
+} ma_noise_config;
+
+typedef struct
+{
+    ma_data_source_base ds;
+    ma_noise_config config;
+    ma_lcg lcg;
+    ...;
+    void* _pHeap;
+    ma_bool32 _ownsHeap;
+} ma_noise;
+
+ma_noise_config ma_noise_config_init(ma_format format, ma_uint32 channels, ma_noise_type type, ma_int32 seed, double amplitude);
+ma_result ma_noise_get_heap_size(const ma_noise_config* pConfig, size_t* pHeapSizeInBytes);
+ma_result ma_noise_init(const ma_noise_config* pConfig, const ma_allocation_callbacks* pAllocationCallbacks, ma_noise* pNoise);
+void ma_noise_uninit(ma_noise* pNoise, const ma_allocation_callbacks* pAllocationCallbacks);
+ma_result ma_noise_read_pcm_frames(ma_noise* pNoise, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
+ma_result ma_noise_set_amplitude(ma_noise* pNoise, double amplitude);
+ma_result ma_noise_set_seed(ma_noise* pNoise, ma_int32 seed);
+ma_result ma_noise_set_type(ma_noise* pNoise, ma_noise_type type);
+
 /********************** dr_flac ******************************/
 
 typedef   signed char           ma_dr_flac_int8;
@@ -888,7 +994,6 @@ if os.name == "posix":
     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
         compiler_args += shlex.split(os.environ.get("PYMINIAUDIO_EXTRA_CFLAGS", ""))
 __macros = [
-    ("MA_NO_GENERATION", "1"),  # waveform generation
     ("MA_NO_ENCODING", "1"),  # audio encoding
     ("MA_NO_RESOURCE_MANAGER", "1"),  # high level api
     ("MA_NO_NODE_GRAPH", "1"),  # high level api

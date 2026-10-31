@@ -26,12 +26,12 @@ This is a Pythonic interface to the cross-platform [miniaudio](https://github.co
 - generators for the Audio playback and recording
 - sample data is usually in the form of a Python ``array`` with appropriately sized elements
   depending on the sample width (rather than a raw block of bytes)
-- TODO: filters, waveform generators?
+- TODO: migrate deprecated `ma_stop_proc`/`stopCallback` usage to `ma_device_notification_proc`/`notificationCallback` for more reliable device state and reroute handling.
 
 
 *Requires Python 3.10 or newer.  Also works on pypy3 (because it uses cffi).*
 
-*The miniaudio C library version is 0.11.25.*
+*The miniaudio C library version is 0.11.26.*
 
 Software license for these Python bindings, miniaudio and the decoders: MIT
 
@@ -149,6 +149,11 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 > Audio file format
 
 
+*enum class*  ``NoiseType``
+ names:  ``WHITE`` ``PINK`` ``BROWNIAN``
+> Noise type for the noise generator
+
+
 *enum class*  ``SampleFormat``
  names:  ``UNKNOWN`` ``UNSIGNED8`` ``SIGNED16`` ``SIGNED24`` ``SIGNED32`` ``FLOAT32``
 > Sample format in memory
@@ -162,6 +167,11 @@ with miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16,
 *enum class*  ``ThreadPriority``
  names:  ``IDLE`` ``LOWEST`` ``LOW`` ``NORMAL`` ``HIGH`` ``HIGHEST`` ``REALTIME``
 > The priority of the worker thread (default=HIGHEST)
+
+
+*enum class*  ``WaveformType``
+ names:  ``SINE`` ``SQUARE`` ``TRIANGLE`` ``SAWTOOTH``
+> Waveform type for the waveform generator
 
 
 *function*  ``convert_frames  (from_fmt: miniaudio.SampleFormat, from_numchannels: int, from_samplerate: int, sourcedata: bytes, to_fmt: miniaudio.SampleFormat, to_numchannels: int, to_samplerate: int) -> bytearray``
@@ -219,6 +229,18 @@ chosen format.
 > Streams the flac audio file as interleaved 16 bit signed integer sample arrays segments. This uses
 a fixed chunk size and cannot be used as a generic miniaudio decoder input stream. Consider using
 stream_file() instead.
+
+
+*function*  ``generate_noise  (num_frames: int, sample_rate: int = 44100, channels: int = 1, noise_type: miniaudio.NoiseType = <NoiseType.WHITE: 0>, amplitude: float = 1.0, seed: int = 0, duplicate_channels: bool = False, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>) -> bytes``
+> Generate ``num_frames`` of noise PCM data and return it as raw bytes.
+
+
+*function*  ``generate_pulsewave  (num_frames: int, sample_rate: int = 44100, channels: int = 1, duty_cycle: float = 0.5, amplitude: float = 1.0, frequency: float = 440.0, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>) -> bytes``
+> Generate ``num_frames`` of pulse wave PCM data and return it as raw bytes.
+
+
+*function*  ``generate_waveform  (num_frames: int, sample_rate: int = 44100, channels: int = 1, waveform_type: miniaudio.WaveformType = <WaveformType.SINE: 0>, amplitude: float = 1.0, frequency: float = 440.0, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>) -> bytes``
+> Generate ``num_frames`` of waveform PCM data and return it as raw bytes.
 
 
 *function*  ``get_enabled_backends  () -> Set[miniaudio.Backend]``
@@ -303,6 +325,14 @@ amount. This is particularly useful to plug this stream into an audio device cal
 variable number of frames per call.
 
 
+*function*  ``stream_noise  (sample_rate: int = 44100, channels: int = 1, noise_type: miniaudio.NoiseType = <NoiseType.WHITE: 0>, amplitude: float = 1.0, seed: int = 0, duplicate_channels: bool = False, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>, frames_to_read: int = 4096) -> 'PlaybackCallbackGeneratorType'``
+> Convenience generator to stream (endless) noise as PCM audio.
+
+
+*function*  ``stream_pulsewave  (sample_rate: int = 44100, channels: int = 1, duty_cycle: float = 0.5, amplitude: float = 1.0, frequency: float = 440.0, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>, frames_to_read: int = 4096) -> 'PlaybackCallbackGeneratorType'``
+> Convenience generator to stream an (endless) pulse wave as PCM audio.
+
+
 *function*  ``stream_raw_pcm_memory  (pcmdata: array.array | memoryview | bytes, nchannels: int, sample_width: int, frames_to_read: int = 4096) -> Generator[bytes | array.array, int, NoneType]``
 > Convenience generator function to stream raw pcm audio data from memory. Usually you don't need to
 use this as the library provides many other streaming options that work on much smaller, encoded,
@@ -312,6 +342,10 @@ this generator as a stream source.  The data can be provided in ``array`` type o
 the audio data has, and the sample with in bytes.
 
 
+*function*  ``stream_waveform  (sample_rate: int = 44100, channels: int = 1, waveform_type: miniaudio.WaveformType = <WaveformType.SINE: 0>, amplitude: float = 1.0, frequency: float = 440.0, sample_format: miniaudio.SampleFormat = <SampleFormat.FLOAT32: 5>, frames_to_read: int = 4096) -> 'PlaybackCallbackGeneratorType'``
+> Convenience generator to stream an (endless) waveform as PCM audio.
+
+
 *function*  ``stream_with_callbacks  (sample_stream: Generator[bytes | array.array, int, NoneType], progress_callback: Callable[[int], NoneType] | None = None, frame_process_method: Callable[[bytes | array.array], bytes | array.array] | None = None, end_callback: Callable | None = None) -> Generator[bytes | array.array, int, NoneType]``
 > Convenience generator function to add callback and processing functionality to another stream. You
 can specify : > A callback function that gets called during play and takes an int for the number of
@@ -319,6 +353,14 @@ frames played.  > A function that can be used to process raw data frames before 
 back (takes an array.array or bytes, returns an array.array or bytes) *Note: if the processing
 method is slow it will result in audio glitchiness  > A callback function that gets called when the
 stream ends playing.
+
+
+*function*  ``volume_db_to_linear  (gain_db: float) -> float``
+> Convert a gain in decibels to a linear volume factor.
+
+
+*function*  ``volume_linear_to_db  (factor: float) -> float``
+> Convert a linear volume factor to gain in decibels.
 
 
 *function*  ``vorbis_get_file_info  (filename: str) -> miniaudio.SoundFileInfo``
@@ -522,7 +564,7 @@ The generator should already be started before passing it in.
 
 *class*  ``SoundFileInfo``
 
-``SoundFileInfo  (self, name: str, file_format: miniaudio.FileFormat, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int, sub_format: int = None) ``
+``SoundFileInfo  (self, name: str, file_format: miniaudio.FileFormat, nchannels: int, sample_rate: int, sample_format: miniaudio.SampleFormat, duration: float, num_frames: int, sub_format: int | None = None) ``
 > Contains various properties of an audio file.  Accessible attributes: name (str), nchannels (int),
 sample_rate (int), sample_format (SampleFormat), sample_format_name (str), sample_width (int),
 num_frames (int), duration (float), file_format (FileFormat), sub_format (int or None).
