@@ -15,14 +15,13 @@ version = "1.72"
 description = "python bindings for the miniaudio library and its decoders (mp3, flac, ogg vorbis, wav)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Irmen de Jong", email = "irmen@razorvine.net"}
 ]
 keywords = ["sound", "audio", "playback", "recording", "conversion", "decoding"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: C",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",

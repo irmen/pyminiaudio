@@ -988,7 +988,9 @@ def check_linker_need_libatomic():
 
 if os.name == "posix":
     compiler_args = ["-g1", "-O3", "-ffast-math"]
-    libraries = ["m", "pthread", "dl"]
+    libraries = ["m", "pthread"]
+    if sys.platform.startswith("openbsd"):
+        libraries.append("dl")
     if check_linker_need_libatomic():
         libraries.append("atomic")
     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
