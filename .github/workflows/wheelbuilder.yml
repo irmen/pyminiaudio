@@ -15,8 +15,12 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+          - os: ubuntu-26.04-arm
+            architectures: auto armv7l
           - os: windows-latest
-          - os: macos-latest
+          - os: windows-11-arm
+          - os: macos-latest # arm64
+          - os: macos-26-intel
 
     steps:
       - uses: actions/checkout@v6
@@ -31,6 +35,7 @@ jobs:
         env:
         # I can't get windows tests to work, but at least here's linux testing the built wheels
           CIBW_TEST_REQUIRES: pytest
+          CIBW_ARCHS: ${{ matrix.architectures || 'auto' }}
           CIBW_ARCHS_MACOS: 'x86_64 arm64'
           CIBW_BUILD: 'cp310-* cp311-* cp312-* cp313-* cp314-* cp314t-* cp315-* cp315t-*'
           CIBW_TEST_COMMAND_LINUX: "cd {project} && pytest -v tests/"
