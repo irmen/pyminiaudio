@@ -14,7 +14,7 @@ name = "miniaudio"
 version = "1.72"
 description = "python bindings for the miniaudio library and its decoders (mp3, flac, ogg vorbis, wav)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Irmen de Jong", email = "irmen@razorvine.net"}

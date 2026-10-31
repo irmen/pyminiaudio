@@ -29,7 +29,7 @@ This is a Pythonic interface to the cross-platform [miniaudio](https://github.co
 - TODO: migrate deprecated `ma_stop_proc`/`stopCallback` usage to `ma_device_notification_proc`/`notificationCallback` for more reliable device state and reroute handling.
 
 
-*Requires Python 3.10 or newer.  Also works on pypy3 (because it uses cffi).*
+*Requires Python 3.11 or newer.  Also works on pypy3 (because it uses cffi).*
 
 *The miniaudio C library version is 0.11.26.*
 
