@@ -36,7 +36,7 @@ dist:
 win_wheels: build
 	rm -rf build/ dist/*
 	${PYTHON} -m pip install build
-	for py in 3.10 3.11 3.12 3.13 3.14; do \
+	for py in 3.10 3.11 3.12 3.13 3.14 3.14t 3.15 3.15t; do \
 		py -$$py -m build; \
 	done
 
